@@ -9,7 +9,7 @@
 # ----------------------------- Global Variables ------------------------------
 
 version=1.0.0
-usage="usage: ownsnapshot [parameter]
+usage="usage: own-snapshot [parameter]
 
  -c	name of the config file without ".conf" at the end
  -d	debug level: previous, commands, config, snapshots, full
