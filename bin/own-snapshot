@@ -38,7 +38,7 @@ if [ "$#" == "0" ]
 	then	echo "${usage}" && exit 0
 fi
 
-while getopts ":c:d:e:f:l:m:o:p:q:r:s:z:h" opt; do
+while getopts ":c:d:e:f:l:m:o:p:q:r:s:z:vh" opt; do
 	case ${opt} in
 		c)	config=$OPTARG
 			;;
