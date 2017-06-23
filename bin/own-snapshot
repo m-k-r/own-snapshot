@@ -28,7 +28,7 @@ parameter used by ownbackup
  -r	source for snapshot
  -s	server
  -z certificate file"
-conf_dir="/etc/own-snapshot"
+conf_dir="/etc/own-snapshot/"
 mode_supported="btrfs zfs directory file kvm mysql"
 config_options_rsync="-a"
 
