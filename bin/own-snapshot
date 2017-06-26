@@ -249,7 +249,7 @@ if [ "${mode_create}" == "zfs" ]
 		then	snap_string_separator_1="_"
 fi
 snap_string_complete=${snap_string_separator_1}${snap_string}
-snap_name=${snap_string_separator_1}${snap_name}
+#snap_name=${snap_string_separator_1}${snap_name}
 
 # config_user has to be in the format user_id:group_id
 if [ -n "${config_user}" ]
@@ -415,18 +415,18 @@ do	aa=$((${aa} + 1))
 														else	snap_shots_strict=$(find ${root_set[aa]}/.zfs/snapshot/${snap_name}* -maxdepth 0 -printf "%f\n" 2> /dev/null)
 													fi
 
-													snap_shots_strict=$(echo "${snap_shots_strict}" | sed "s;${snap_label};${snap_set[aa]}@${snap_label};g" 2> /dev/null)
+													snap_shots_strict=$(echo "${snap_shots_strict}" | sed "s;${snap_name};${snap_set[aa]}@${snap_name};g" 2> /dev/null)
 
 											else	if	[ -n "${config_server}" ]
-														then	snap_shots_strict=$(ssh ${config_server}${config_port} "zfs list -t snapshot" | grep ${snap_set[aa]}${snap_name} | awk '{ print $1 }')
-														else	snap_shots_strict=$(zfs list -t snapshot | grep ${snap_set[aa]}${snap_name} | awk '{ print $1 }')
+														then	snap_shots_strict=$(ssh ${config_server}${config_port} "zfs list -t snapshot" | grep ${snap_set[aa]}${snap_string_separator_1}${snap_name} | awk '{ print $1 }')
+														else	snap_shots_strict=$(zfs list -t snapshot | grep ${snap_set[aa]}${snap_string_separator_1}${snap_name} | awk '{ print $1 }')
 													fi
 										fi
 
 								elif	[ "${mode_create}" == "btrfs" ] || [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ]
 									then	if	[ -n "${config_server}" ] && [ ! "${mode_create}" == "mysql" ] || [ "${mode_create}" == "mysql" ] && [ "${config_target}" == "remote" ]
-												then	snap_shots_strict=$(ssh ${config_server}${config_port} "find ${snap_set[aa]}${snap_file[aa]}${snap_name}* -maxdepth 0 2> /dev/null")
-												else	snap_shots_strict=$(find ${snap_set[aa]}${snap_file[aa]}${snap_name}* -maxdepth 0 2> /dev/null)
+												then	snap_shots_strict=$(ssh ${config_server}${config_port} "find ${snap_set[aa]}${snap_file[aa]}${snap_string_separator_1}${snap_name}* -maxdepth 0 2> /dev/null")
+												else	snap_shots_strict=$(find ${snap_set[aa]}${snap_file[aa]}${snap_string_separator_1}${snap_name}* -maxdepth 0 2> /dev/null)
 											fi
 							fi
 
