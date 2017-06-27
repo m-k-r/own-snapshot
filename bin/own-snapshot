@@ -8,7 +8,7 @@
 #
 # ----------------------------- Global Variables ------------------------------
 
-version=1.0.0
+version=1.0
 usage="usage: own-snapshot [parameter]
 
  -c	name of the config file without ".conf" at the end
@@ -142,17 +142,18 @@ if [ "${config_function}" == "list" ]
 		config_target=$(sed -n 4p <<< "${config_complete}" | cut -d " " -f 4)
 		config_port=$(sed -n 4p <<< "${config_complete}" | cut -d " " -f 5)
 		mode_create=$(sed -n 5p <<< "${config_complete}" | cut -d " " -f 3)
+		snap_label=$(sed -n 6p <<< "${config_complete}" | cut -d " " -f 3)
 		snap_string_separator_1=$(sed -n 8p <<< "${config_complete}" | cut -d " " -f 3)
 		snap_string_separator_2=$(sed -n 8p <<< "${config_complete}" | cut -d " " -f 4)
 		snap_list_frequency_list=$(sed -n 9p <<< "${config_complete}")
 
+		# snap_string can be given by argument so that all snapshots follow the same scheme
 		if [ -n "${snap_string}" ]
 			then	snap_date=${snap_string}
 			else	snap_date=$(date +$(sed -n 7p <<< "${config_complete}" | cut -d " " -f 3))
 		fi
 
-		snap_label=$(sed -n 6p <<< "${config_complete}" | cut -d " " -f 3)
-
+		bb="0"
 		# get the current frequency of snapshots
 		for snap_list_frequency_list_element in ${snap_list_frequency_list}
 		do	bb=$((${bb} + 1))
@@ -192,7 +193,7 @@ if [ "${config_function}" == "list" ]
 			snap_limit[aa]=$(echo ${snap_line} | cut -f ${bb})
 		done
 
-		unset bb
+		unset bb conf config_complete config_table_snap snap_date
 		IFS=${IFSBAK}
 
 	else
@@ -213,17 +214,26 @@ if	[ -n "${config_server}" ]
 
 			config_ssh_part1="ssh ${config_server}${config_port} \""
 			config_ssh_part2="\""
+
+			# mysql und file with encryption are piped instead of copied. you have to specify: server (remote to remote), remote (local to remote) and local (remote to local).
+			if [ "${mode_create}" == "mysql" ] || [ "${mode_create}" == "file" ] && [ -n "${config_certificate}" ]
+				then	if	[ ! -n "${config_target}" ]
+							then	config_target=server
+						fi
+
+						if	[ ! "${config_target}" == "local" ] && [ ! "${config_target}" == "remote" ] && [ ! "${config_target}" == "server" ]
+							then	echo "the ssh target has to be local, remote or server" && exit 1
+						fi
+						# if the requirements aren't met config_target has to be disabled because it potentially can disable the ssh settings
+				else	unset config_target
+			fi
 fi
 
-# mode_create=mysql and file know two kind of server: source (local) and target (remote)
 if [ "${mode_create}" == "mysql" ] || [ "${mode_create}" == "file" ]
 	then
 
 		if [ -n "${config_certificate}" ]
 			then	snap_encrypt=" | openssl smime -encrypt -binary -text -aes256 -outform DER ${config_certificate}"
-					if	[ -n "${config_server}" ] && [ ! -n "${config_target}" ]
-						then	config_target=server
-					fi
 		fi
 
 		#set back the control variable
@@ -330,7 +340,7 @@ do	aa=$((${aa} + 1))
 					if	[ "${mode_create}" == "btrfs" ] || [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ]
 						then
 
-							if	[ -n "${config_server}" ] && [ ! "${mode_create}" == "mysql" ] || [ "${mode_create}" == "mysql" ] && [ "${config_target}" == "remote" ]
+							if	[ -n "${config_server}" ] && [ ! "${config_target}" == "local" ]
 								then	probe=$(ssh ${config_server}${config_port} "find ${snap_set[aa]}${snap_file[aa]}${snap_string_complete}${snap_file_type[aa]} -maxdepth 0 2> /dev/null")
 								else	probe=$(find ${snap_set[aa]}${snap_file[aa]}${snap_string_complete}${snap_file_type[aa]} -maxdepth 0 2> /dev/null)
 							fi
@@ -424,7 +434,7 @@ do	aa=$((${aa} + 1))
 										fi
 
 								elif	[ "${mode_create}" == "btrfs" ] || [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ]
-									then	if	[ -n "${config_server}" ] && [ ! "${mode_create}" == "mysql" ] || [ "${mode_create}" == "mysql" ] && [ "${config_target}" == "remote" ]
+									then	if	[ -n "${config_server}" ] && [ ! "${config_target}" == "local" ]
 												then	snap_shots_strict=$(ssh ${config_server}${config_port} "find ${snap_set[aa]}${snap_file[aa]}${snap_string_separator_1}${snap_name}* -maxdepth 0 2> /dev/null")
 												else	snap_shots_strict=$(find ${snap_set[aa]}${snap_file[aa]}${snap_string_separator_1}${snap_name}* -maxdepth 0 2> /dev/null)
 											fi
@@ -450,7 +460,7 @@ do	aa=$((${aa} + 1))
 										then	command="${config_ssh_part1}btrfs subvolume delete ${snap_del}${config_ssh_part2}"
 
 									elif	[ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ]
-										then	if	[ -n "${snap_del_skip_ssh}" ]
+										then	if	[ -n "${config_server}" ] && [ ! "${config_target}" == "local" ]
 													then	command="rm -rf ${snap_del}"
 													else	command="${config_ssh_part1}rm -rf ${snap_del}${config_ssh_part2}"
 												fi
