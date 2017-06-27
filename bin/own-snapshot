@@ -370,9 +370,9 @@ do	aa=$((${aa} + 1))
 							then
 
 								if	[ "${mode_create}" == "file" ]
-									then	command_part1="cat ${root_set[aa]}${encrypt}"
+									then	command_part1="cat ${root_set[aa]}${snap_encrypt}"
 									elif	[ "${mode_create}" == "mysql" ]
-										then	command_part1="mysqldump --defaults-extra-file=${config_credentials} --routines --triggers --single-transaction ${snap_file[aa]}${encrypt}"
+										then	command_part1="mysqldump --defaults-extra-file=${config_credentials} --routines --triggers --single-transaction ${snap_file[aa]}${snap_encrypt}"
 								fi
 
 								command_part2="cat > ${snap_set[aa]}${snap_file[aa]}${snap_string_complete}${snap_file_type[aa]}${change_user[aa]}"
