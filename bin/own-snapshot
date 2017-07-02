@@ -11,7 +11,7 @@
 version=1.0
 usage="usage: own-snapshot [parameter]
 
- -c	name of the config file without ".conf" at the end
+ -c	name of the config file without '.conf' at the end
  -d	debug level: previous, commands, config, snapshots, full
  -e	don't create new snapshots. used to handle snapshots or files created by other programms
  -f	the frequency as defined in the config file (hourly, daily, weekly)
@@ -253,7 +253,7 @@ if [ "${mode_create}" == "mysql" ] || [ "${mode_create}" == "file" ]
 fi
 
 snap_string_offset=$((${#snap_string}))
-if [ "${mode_create}" == "zfs" ]
+if [ "${mode_create}" == "zfs" ] || [ "${mode_create}" == "kvm" ]
 	then	snap_string_separator_1="@"
 	elif	[ ! -n "${snap_string_separator_1}" ]
 		then	snap_string_separator_1="_"
