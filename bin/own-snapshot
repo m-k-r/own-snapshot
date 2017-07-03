@@ -81,6 +81,7 @@ done
 ## debug-level:
 ##	previous:	checks if previous snapshot with the same name exists
 ##	commands:	show commands for snapshot & snapshot-deletion
+##	snapvars:	from own-backup will be translated to commands
 ##	config:		checks if the configuration is valid
 ##	snapshots:	commands + show the snapshotlists, -numbers
 ##	full:		all the above
@@ -98,6 +99,9 @@ if [ -n "${debug}" ]
 			elif [ "${debug}" == "commands" ]
 				then	check_commands="set"
 
+			elif [ "${debug}" == "snapvars" ]
+				then	check_commands="set"
+
 			elif [ "${debug}" == "snapshots" ]
 				then	check_commands="set"
 						check_snapshots="set"
@@ -110,7 +114,6 @@ if [ -n "${debug}" ]
 
 			else	echo "no supported debug-level found: ${debug}" && exit 1
 		fi
-
 fi
 
 # define the function and basic parameters
@@ -350,8 +353,8 @@ do	aa=$((${aa} + 1))
 
 								if [ ! -z ${root_set[aa]} ] && [ ! "${mode_create}" == "kvm" ]
 									then	if	[ -n "${config_server}" ]
-												then	probe=$(ssh ${config_server}${config_port} "find ${root_set[aa]}${snap_string_complete}/.zfs/snapshot/ -maxdepth 0 2> /dev/null")
-												else	probe=$(find ${root_set[aa]}${snap_string_complete}/.zfs/snapshot/ -maxdepth 0 2> /dev/null)
+												then	probe=$(ssh ${config_server}${config_port} "find ${root_set[aa]}/.zfs/snapshot/${snap_string} -maxdepth 0 2> /dev/null")
+												else	probe=$(find ${root_set[aa]}/.zfs/snapshot/${snap_string} -maxdepth 0 2> /dev/null)
 											fi
 
 									else	if	[ -n "${config_server}" ]
