@@ -27,7 +27,7 @@ parameter used by ownbackup
  -q	path to credentials file for mysql
  -r	source for snapshot
  -s	server
- -z certificate file"
+ -z	certificate file"
 conf_dir="/etc/own-snapshot/"
 mode_supported="btrfs zfs directory file kvm mysql"
 config_options_rsync="-a"
@@ -88,9 +88,7 @@ done
 
 # define debuglevel
 if [ -n "${debug}" ]
-	then
-
-		if [ "${debug}" == "config" ]
+	then	if [ "${debug}" == "config" ]
 			then	check_config="set"
 
 			elif [ "${debug}" == "previous" ]
@@ -104,13 +102,13 @@ if [ -n "${debug}" ]
 
 			elif [ "${debug}" == "snapshots" ]
 				then	check_commands="set"
-						check_snapshots="set"
+					check_snapshots="set"
 
 			elif [ "${debug}" == "full" ]
 				then	check_config="set"
-						check_previous="set"
-						check_commands="set"
-						check_snapshots="set"
+					check_previous="set"
+					check_commands="set"
+					check_snapshots="set"
 
 			else	echo "no supported debug-level found: ${debug}" && exit 1
 		fi
@@ -119,20 +117,18 @@ fi
 # define the function and basic parameters
 if [ -n "${config}" ]
 	then	config_function="list"
-			conf="${conf_dir}${config}.conf"
+		conf="${conf_dir}${config}.conf"
 	else	config_function="single"
-			snap_limit=(1)
+		snap_limit=(1)
 fi
 
 if [ "${config_function}" == "list" ]
-	then
-
-		# check if config is set
+	then	# check if config is set
 		if [ "$check_config" == "set" ]
 			then	probe=$(find ${conf} 2>&1)
-					if [ ! "${probe}" == "${conf}" ]
-						then	echo "the config does not exist" && exit 1
-					fi
+				if [ ! "${probe}" == "${conf}" ]
+					then	echo "the config does not exist" && exit 1
+				fi
 		fi
 
 		# get content of the config file
@@ -201,16 +197,16 @@ if [ "${config_function}" == "list" ]
 
 	else
 
-		if	[ -n "${config_server}" ]
+		if [ -n "${config_server}" ]
 			then	probe=$(echo ${server} | grep "#" || true)
-					if [ -n "${probe}" ]
-						then	config_target=$(echo ${config_server} | cut -d "#" -f 2)
-								config_server=$(echo ${config_server} | cut -d "#" -f 1)
-					fi
+				if [ -n "${probe}" ]
+					then	config_target=$(echo ${config_server} | cut -d "#" -f 2)
+						config_server=$(echo ${config_server} | cut -d "#" -f 1)
+				fi
 		fi
 fi
 
-if	[ -n "${config_server}" ]
+if [ -n "${config_server}" ]
 	then	if [ -n "${config_port}" ]
 				then	config_port=" -p ${config_port}"
 			fi
@@ -220,22 +216,20 @@ if	[ -n "${config_server}" ]
 
 			# mysql und file with encryption are piped instead of copied. you have to specify: server (remote to remote), remote (local to remote) and local (remote to local).
 			if [ "${mode_create}" == "mysql" ] || [ "${mode_create}" == "file" ] && [ -n "${config_certificate}" ]
-				then	if	[ ! -n "${config_target}" ]
-							then	config_target=server
-						fi
+				then	if [ ! -n "${config_target}" ]
+						then	config_target=server
+					fi
 
-						if	[ ! "${config_target}" == "local" ] && [ ! "${config_target}" == "remote" ] && [ ! "${config_target}" == "server" ]
-							then	echo "the ssh target has to be local, remote or server" && exit 1
-						fi
-						# if the requirements aren't met config_target has to be disabled because it potentially can disable the ssh settings
+					if [ ! "${config_target}" == "local" ] && [ ! "${config_target}" == "remote" ] && [ ! "${config_target}" == "server" ]
+						then	echo "the ssh target has to be local, remote or server" && exit 1
+					fi
+					# if the requirements aren't met config_target has to be disabled because it potentially can disable the ssh settings
 				else	unset config_target
 			fi
 fi
 
 if [ "${mode_create}" == "mysql" ] || [ "${mode_create}" == "file" ]
-	then
-
-		if [ -n "${config_certificate}" ]
+	then	if [ -n "${config_certificate}" ]
 			then	snap_encrypt=" | openssl smime -encrypt -binary -text -aes256 -outform DER ${config_certificate}"
 		fi
 
@@ -248,9 +242,9 @@ if [ "${mode_create}" == "mysql" ] || [ "${mode_create}" == "file" ]
 			snap_file[aa]=$(echo "${root_set_element}" | rev | cut -d "/" -f 1 | rev)
 
 			probe=$(echo "${snap_file[aa]}" | grep "\.")
-			if	[ -n "${probe}" ]
+			if [ -n "${probe}" ]
 				then	snap_file_type[aa]=.$(echo "${snap_file[aa]}" | cut -d "." -f 2-)
-						snap_file[aa]=$(echo "${snap_file[aa]}" | cut -d "." -f 1)
+					snap_file[aa]=$(echo "${snap_file[aa]}" | cut -d "." -f 1)
 			fi
 		done
 fi
@@ -258,7 +252,7 @@ fi
 snap_string_offset=$((${#snap_string}))
 if [ "${mode_create}" == "zfs" ] || [ "${mode_create}" == "kvm" ]
 	then	snap_string_separator_1="@"
-	elif	[ ! -n "${snap_string_separator_1}" ]
+	elif [ ! -n "${snap_string_separator_1}" ]
 		then	snap_string_separator_1="_"
 fi
 snap_string_complete=${snap_string_separator_1}${snap_string}
@@ -267,22 +261,22 @@ snap_string_complete=${snap_string_separator_1}${snap_string}
 # config_user has to be in the format user_id:group_id
 if [ -n "${config_user}" ]
 	then	probe=$(echo ${config_user} | grep ":" || true)
-			if [ ! -n "${probe}" ]
-				then	config_user="${config_user}:${config_user}"
-			fi
+		if [ ! -n "${probe}" ]
+			then	config_user="${config_user}:${config_user}"
+		fi
 
-			aa="-1"
+		aa="-1"
 
-			for root_set_element in "${root_set[@]}"
-			do	aa=$((${aa} + 1))
-				change_user[aa]=" && chown -R ${config_user} ${snap_set[aa]}${snap_file[aa]}${snap_string_complete}${snap_file_type[aa]}"
-			done
+		for root_set_element in "${root_set[@]}"
+		do	aa=$((${aa} + 1))
+			change_user[aa]=" && chown -R ${config_user} ${snap_set[aa]}${snap_file[aa]}${snap_string_complete}${snap_file_type[aa]}"
+		done
 fi
 
 # internally mode_create is not different from file execpt an additional rsync
 if [ "${mode_create}" == "directory" ]
 	then	config_options_rsync2="/"
-			mode_create=file
+		mode_create=file
 fi
 
 #set back the control variable
@@ -290,157 +284,143 @@ aa="-1"
 
 if [ "${check_config}" == "set" ]
 	then	if [[ ! "${mode_supported}" == *"${mode_create}"* ]]
-				then	echo "no supported mode was found: ${mode_create}" && exit 1
-			fi
+			then	echo "no supported mode was found: ${mode_create}" && exit 1
+		fi
 
-			if [ ! -n "${snap_set}" ] || [ -z "${snap_set}" ]
-				then	echo "Target is not set or empty" && exit 1
-			fi
+		if [ ! -n "${snap_set}" ] || [ -z "${snap_set}" ]
+			then	echo "Target is not set or empty" && exit 1
+		fi
 
-			if [ ! -n "${root_set}" ] || [ -z "${root_set}" ] && [ ! "${mode_create}" == "zfs" ]
-				then	echo "Source is not set or empty" && exit 1
-			fi
+		if [ ! -n "${root_set}" ] || [ -z "${root_set}" ] && [ ! "${mode_create}" == "zfs" ]
+			then	echo "Source is not set or empty" && exit 1
+		fi
 
-			echo "mode is: ${mode_create} and the frequency is: ${snap_list_frequency}"
-			echo "label, frequency and date is: ${snap_string} with the length: ${snap_string_offset}"
-			echo "the sourceserver is: ${config_server}. Valid is an ip, a dns or empty"
-			echo "Target, Snapshotnumer and Source are:"
+		echo "mode is: ${mode_create} and the frequency is: ${snap_list_frequency}"
+		echo "label, frequency and date is: ${snap_string} with the length: ${snap_string_offset}"
+		echo "the sourceserver is: ${config_server}. Valid is an ip, a dns or empty"
+		echo "Target, Snapshotnumer and Source are:"
 
-			for snap_set_element in "${snap_set[@]}"
-			do	aa=$((${aa} + 1)) 
-				echo "${snap_set[aa]}${snap_file[aa]}${snap_string_complete}${snap_file_type[aa]} ${snap_limit[aa]} ${root_set[aa]}"
-			done
-			aa="-1"
+		for snap_set_element in "${snap_set[@]}"
+		do	aa=$((${aa} + 1)) 
+			echo "${snap_set[aa]}${snap_file[aa]}${snap_string_complete}${snap_file_type[aa]} ${snap_limit[aa]} ${root_set[aa]}"
+		done
+		aa="-1"
 
-			if [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ]
-				then	echo "user:group is: ${config_user}"
-						echo "the path to the certificate is: ${config_certificate}"
-						echo "the target for the snapshot is: ${config_target}. Valid is local, remote and empty"
-			fi
+		if [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ]
+			then	echo "user:group is: ${config_user}"
+				echo "the path to the certificate is: ${config_certificate}"
+				echo "the target for the snapshot is: ${config_target}. Valid is local, remote and empty"
+		fi
 
-			if [ "${mode_create}" == "mysql" ]
-				then	echo "the path to the credentials is: ${config_credentials}"
-			fi
+		if [ "${mode_create}" == "mysql" ]
+			then	echo "the path to the credentials is: ${config_credentials}"
+		fi
 
-			if [ ! "${check_commands}" == "set" ]
-				then	exit 0
-			fi
+		if [ ! "${check_commands}" == "set" ]
+			then	exit 0
+		fi
 fi
 
 for snap_set_element in "${snap_set[@]}"
 do	aa=$((${aa} + 1))
 
 	if [ ! -z "${snap_limit[aa]}" ] && [ ! "${snap_limit[aa]}" == "0" ]
-		then
-
-			if [ "${check_commands}" == "set" ]
+		then	if [ "${check_commands}" == "set" ]
 				then	printf -- "--------------- ${snap_set_element} ---------------\n"
 			fi
 
 			if [ "${check_previous}" == "set" ]
-				then
-
-					if	[ "${mode_create}" == "btrfs" ] || [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ]
-						then
-
-							if	[ -n "${config_server}" ] && [ ! "${config_target}" == "local" ]
+				then	if [ "${mode_create}" == "btrfs" ] || [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ]
+						then	if [ -n "${config_server}" ] && [ ! "${config_target}" == "local" ]
 								then	probe=$(ssh ${config_server}${config_port} "find ${snap_set[aa]}${snap_file[aa]}${snap_string_complete}${snap_file_type[aa]} -maxdepth 0 2> /dev/null")
 								else	probe=$(find ${snap_set[aa]}${snap_file[aa]}${snap_string_complete}${snap_file_type[aa]} -maxdepth 0 2> /dev/null)
 							fi
 
-						elif	[ "${mode_create}" == "zfs" ] || [ "${mode_create}" == "kvm" ]
-							then
+						elif [ "${mode_create}" == "zfs" ] || [ "${mode_create}" == "kvm" ]
+							then	if [ ! -z ${root_set[aa]} ] && [ ! "${mode_create}" == "kvm" ]
+									then	if [ -n "${config_server}" ]
+											then	probe=$(ssh ${config_server}${config_port} "find ${root_set[aa]}/.zfs/snapshot/${snap_string} -maxdepth 0 2> /dev/null")
+											else	probe=$(find ${root_set[aa]}/.zfs/snapshot/${snap_string} -maxdepth 0 2> /dev/null)
+										fi
 
-								if [ ! -z ${root_set[aa]} ] && [ ! "${mode_create}" == "kvm" ]
-									then	if	[ -n "${config_server}" ]
-												then	probe=$(ssh ${config_server}${config_port} "find ${root_set[aa]}/.zfs/snapshot/${snap_string} -maxdepth 0 2> /dev/null")
-												else	probe=$(find ${root_set[aa]}/.zfs/snapshot/${snap_string} -maxdepth 0 2> /dev/null)
-											fi
-
-									else	if	[ -n "${config_server}" ]
-												then	probe=$(ssh ${config_server}${config_port}${config_port} "zfs list -t snapshot | grep ${snap_set[aa]}${snap_string_complete}")
-												else	probe=$(zfs list -t snapshot | grep ${snap_set[aa]}${snap_string_complete})
-											fi
+									else	if [ -n "${config_server}" ]
+											then	probe=$(ssh ${config_server}${config_port}${config_port} "zfs list -t snapshot | grep ${snap_set[aa]}${snap_string_complete}")
+											else	probe=$(zfs list -t snapshot | grep ${snap_set[aa]}${snap_string_complete})
+										fi
 								fi
 					fi
 
 					# if snapshot already exists the snapshot will be omitted
-					if	[ -n "${probe}" ]
+					if [ -n "${probe}" ]
 						then	previous=exists
 					fi
 			fi
 
-			if	[ ! "${previous}" == "exists" ]
-				then
-
-					if	[ "${mode_create}" == "zfs" ]
+			if [ ! "${previous}" == "exists" ]
+				then	if [ "${mode_create}" == "zfs" ]
 						then	command="${config_ssh_part1}zfs snapshot ${snap_set[aa]}${snap_string_complete}${config_ssh_part2}"
 
-						elif	[ "${mode_create}" == "btrfs" ]
+						elif [ "${mode_create}" == "btrfs" ]
 							then	command="${config_ssh_part1}btrfs subvolume snapshot -r ${root_set[aa]} ${snap_set[aa]}${snap_string_complete}${config_ssh_part2}"
 
-						elif	[ -n "${config_certificate}" ] && [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ]
-							then
-
-								if	[ "${mode_create}" == "file" ]
+						elif [ -n "${config_certificate}" ] && [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ]
+							then	if [ "${mode_create}" == "file" ]
 									then	command_part1="cat ${root_set[aa]}${snap_encrypt}"
-									elif	[ "${mode_create}" == "mysql" ]
+									elif [ "${mode_create}" == "mysql" ]
 										then	command_part1="mysqldump --defaults-extra-file=${config_credentials} --routines --triggers --single-transaction ${snap_file[aa]}${snap_encrypt}"
 								fi
 
 								command_part2="cat > ${snap_set[aa]}${snap_file[aa]}${snap_string_complete}${snap_file_type[aa]}${change_user[aa]}"
 
-								if	[ -n "${config_server}" ]
-									then	if	[ "${config_target}" == "local" ]
-												then	command="${config_ssh_part1}${command_part1}${config_ssh_part2} | ${command_part2}"
-														snap_del_skip_ssh=set
-												elif	[ "${config_target}" == "remote" ]
-													then	command="${command_part1} | ${config_ssh_part1}${command_part2}${config_ssh_part2}"
-												elif	[ "${config_target}" == "server" ]
-													then	command="${config_ssh_part1}${command_part1} | ${command_part2}${config_ssh_part2}"
-											fi
+								if [ -n "${config_server}" ]
+									then	if [ "${config_target}" == "local" ]
+											then	command="${config_ssh_part1}${command_part1}${config_ssh_part2} | ${command_part2}"
+												snap_del_skip_ssh=set
+											elif [ "${config_target}" == "remote" ]
+												then	command="${command_part1} | ${config_ssh_part1}${command_part2}${config_ssh_part2}"
+											elif [ "${config_target}" == "server" ]
+												then	command="${config_ssh_part1}${command_part1} | ${command_part2}${config_ssh_part2}"
+										fi
 									else	command="${command_part1} | ${command_part2}"
 								fi
 
-						elif	[ "${mode_create}" == "file" ]
+						elif [ "${mode_create}" == "file" ]
 							then	command="${config_ssh_part1}rsync ${config_options_rsync} ${root_set[aa]}${config_options_rsync2} ${snap_set[aa]}${snap_file[aa]}${snap_string_complete}${snap_file_type[aa]}${change_user[aa]}${config_ssh_part2}"
 
-						elif	[ "${mode_create}" == "kvm" ]
+						elif [ "${mode_create}" == "kvm" ]
 							then	command="${config_ssh_part1}qm snapshot ${root_set[aa]} "${snap_string}"${config_ssh_part2}"
 					fi
 
 					# If snapshots not created by this script should be handled, existing_only can be set
 					if [ ! -n "${snapshots_existing_only}" ]
 						then	if [ "${check_commands}" == "set" ]
-									then	echo "${command}"
-									else	eval ${command}
-								fi
+								then	echo "${command}"
+								else	eval ${command}
+							fi
 					fi
 
-					if	[ "${config_function}" == "list" ]
-						then
-
-							# determining the snapshots and their number
-							if	[ "${mode_create}" == "zfs" ] || [ "${mode_create}" == "kvm" ]
+					if [ "${config_function}" == "list" ]
+						then	# determining the snapshots and their number
+							if [ "${mode_create}" == "zfs" ] || [ "${mode_create}" == "kvm" ]
 								then	if [ ! -z ${root_set[aa]} ] && [ ! "${mode_create}" == "kvm" ]
-											then	if	[ -n "${config_server}" ]
-														then	snap_shots_strict=$(ssh ${config_server}${config_port} "find ${root_set[aa]}/.zfs/snapshot/${snap_name}* -maxdepth 0 -printf "%f\n" 2> /dev/null")
-														else	snap_shots_strict=$(find ${root_set[aa]}/.zfs/snapshot/${snap_name}* -maxdepth 0 -printf "%f\n" 2> /dev/null)
-													fi
-
-													snap_shots_strict=$(echo "${snap_shots_strict}" | sed "s;${snap_name};${snap_set[aa]}@${snap_name};g" 2> /dev/null)
-
-											else	if	[ -n "${config_server}" ]
-														then	snap_shots_strict=$(ssh ${config_server}${config_port} "zfs list -t snapshot" | grep ${snap_set[aa]}${snap_string_separator_1}${snap_name} | awk '{ print $1 }')
-														else	snap_shots_strict=$(zfs list -t snapshot | grep ${snap_set[aa]}${snap_string_separator_1}${snap_name} | awk '{ print $1 }')
-													fi
-										fi
-
-								elif	[ "${mode_create}" == "btrfs" ] || [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ]
-									then	if	[ -n "${config_server}" ] && [ ! "${config_target}" == "local" ]
-												then	snap_shots_strict=$(ssh ${config_server}${config_port} "find ${snap_set[aa]}${snap_file[aa]}${snap_string_separator_1}${snap_name}* -maxdepth 0 2> /dev/null")
-												else	snap_shots_strict=$(find ${snap_set[aa]}${snap_file[aa]}${snap_string_separator_1}${snap_name}* -maxdepth 0 2> /dev/null)
+										then	if [ -n "${config_server}" ]
+												then	snap_shots_strict=$(ssh ${config_server}${config_port} "find ${root_set[aa]}/.zfs/snapshot/${snap_name}* -maxdepth 0 -printf "%f\n" 2> /dev/null")
+												else	snap_shots_strict=$(find ${root_set[aa]}/.zfs/snapshot/${snap_name}* -maxdepth 0 -printf "%f\n" 2> /dev/null)
 											fi
+
+											snap_shots_strict=$(echo "${snap_shots_strict}" | sed "s;${snap_name};${snap_set[aa]}@${snap_name};g" 2> /dev/null)
+
+										else	if [ -n "${config_server}" ]
+												then	snap_shots_strict=$(ssh ${config_server}${config_port} "zfs list -t snapshot" | grep ${snap_set[aa]}${snap_string_separator_1}${snap_name} | awk '{ print $1 }')
+												else	snap_shots_strict=$(zfs list -t snapshot | grep ${snap_set[aa]}${snap_string_separator_1}${snap_name} | awk '{ print $1 }')
+											fi
+									fi
+
+								elif [ "${mode_create}" == "btrfs" ] || [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ]
+									then	if [ -n "${config_server}" ] && [ ! "${config_target}" == "local" ]
+											then	snap_shots_strict=$(ssh ${config_server}${config_port} "find ${snap_set[aa]}${snap_file[aa]}${snap_string_separator_1}${snap_name}* -maxdepth 0 2> /dev/null")
+											else	snap_shots_strict=$(find ${snap_set[aa]}${snap_file[aa]}${snap_string_separator_1}${snap_name}* -maxdepth 0 2> /dev/null)
+										fi
 							fi
 
 							snap_number_strict=$(echo ${snap_shots_strict} | awk -F ' ' '{print NF}')
@@ -449,24 +429,24 @@ do	aa=$((${aa} + 1))
 								then	printf "The Snapshotnumber is ${snap_number_strict}:\n${snap_shots_strict}\n"
 							fi
 
-							while	[ "${snap_number_strict}" -gt "${snap_limit[aa]}" ]
+							while [ "${snap_number_strict}" -gt "${snap_limit[aa]}" ]
 							do	snap_del=$(echo ${snap_shots_strict} | awk '{ print $1 }')
 
-								if	[ "${mode_create}" == "kvm" ]
+								if [ "${mode_create}" == "kvm" ]
 									then	snap_del_kvm=${snap_del: -$snap_string_offset}
-											command="${config_ssh_part1}qm delsnapshot ${root_set[aa]} ${snap_del_kvm}${config_ssh_part2}"
+										command="${config_ssh_part1}qm delsnapshot ${root_set[aa]} ${snap_del_kvm}${config_ssh_part2}"
 
-									elif	[ "${mode_create}" == "zfs" ]
+									elif [ "${mode_create}" == "zfs" ]
 										then	command="${config_ssh_part1}zfs destroy ${snap_del}${config_ssh_part2}"
 
-									elif	[ "${mode_create}" == "btrfs" ]
+									elif [ "${mode_create}" == "btrfs" ]
 										then	command="${config_ssh_part1}btrfs subvolume delete ${snap_del}${config_ssh_part2}"
 
-									elif	[ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ]
-										then	if	[ -n "${config_server}" ] && [ ! "${config_target}" == "local" ]
-													then	command="rm -rf ${snap_del}"
-													else	command="${config_ssh_part1}rm -rf ${snap_del}${config_ssh_part2}"
-												fi
+									elif [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ]
+										then	if [ -n "${config_server}" ] && [ ! "${config_target}" == "local" ]
+												then	command="rm -rf ${snap_del}"
+												else	command="${config_ssh_part1}rm -rf ${snap_del}${config_ssh_part2}"
+											fi
 								fi
 
 								snap_shots_strict=$(echo ${snap_shots_strict} | cut -d " " -f 2-)
