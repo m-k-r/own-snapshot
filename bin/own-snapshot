@@ -444,8 +444,8 @@ do	aa=$((${aa} + 1))
 
 									elif [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ]
 										then	if [ -n "${config_server}" ] && [ ! "${config_target}" == "local" ]
-												then	command="rm -rf ${snap_del}"
-												else	command="${config_ssh_part1}rm -rf ${snap_del}${config_ssh_part2}"
+												then	command="${config_ssh_part1}rm -rf ${snap_del}${config_ssh_part2}"
+												else	command="rm -rf ${snap_del}"
 											fi
 								fi
 
