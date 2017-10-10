@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 #
 # Marcel Keller
-# Usage: uses config files to create and delete snapshots for btrfs, zfs, file, directory, mysql and kvm
+# Usage: uses config files to create and delete snapshots for btrfs, zfs, file, directory, mysql, pgsql and kvm
 # License:	GPLv3 http://www.gnu.org/licenses/gpl-3.0
 #
 # ----------------------------- Global Variables ------------------------------
@@ -29,7 +29,7 @@ parameter used by ownbackup
  -s	server
  -z	certificate file"
 conf_dir="/etc/own-snapshot/"
-mode_supported="btrfs zfs directory file kvm mysql"
+mode_supported="btrfs zfs directory file kvm mysql pgsql"
 config_options_rsync="-a"
 
 # --------------------------------- Parameter ----------------------------------
@@ -215,7 +215,7 @@ if [ -n "${config_server}" ]
 			config_ssh_part2="\""
 
 			# mysql und file with encryption are piped instead of copied. you have to specify: server (remote to remote), remote (local to remote) and local (remote to local).
-			if [ "${mode_create}" == "mysql" ] || [ "${mode_create}" == "file" ] && [ -n "${config_certificate}" ]
+			if [ "${mode_create}" == "mysql" ] || [ "${mode_create}" == "pgsql" ] || [ "${mode_create}" == "file" ] && [ -n "${config_certificate}" ]
 				then	if [ ! -n "${config_target}" ]
 						then	config_target=server
 					fi
@@ -228,7 +228,7 @@ if [ -n "${config_server}" ]
 			fi
 fi
 
-if [ "${mode_create}" == "mysql" ] || [ "${mode_create}" == "file" ]
+if [ "${mode_create}" == "mysql" ] || [ "${mode_create}" == "pgsql" ] || [ "${mode_create}" == "file" ]
 	then	if [ -n "${config_certificate}" ]
 			then	snap_encrypt=" | openssl smime -encrypt -binary -text -aes256 -outform DER ${config_certificate}"
 		fi
@@ -306,7 +306,7 @@ if [ "${check_config}" == "set" ]
 		done
 		aa="-1"
 
-		if [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ]
+		if [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ] || [ "${mode_create}" == "pgsql" ]
 			then	echo "user:group is: ${config_user}"
 				echo "the path to the certificate is: ${config_certificate}"
 				echo "the target for the snapshot is: ${config_target}. Valid is local, remote and empty"
@@ -330,7 +330,7 @@ do	aa=$((${aa} + 1))
 			fi
 
 			if [ "${check_previous}" == "set" ]
-				then	if [ "${mode_create}" == "btrfs" ] || [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ]
+				then	if [ "${mode_create}" == "btrfs" ] || [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ] || [ "${mode_create}" == "pgsql" ]
 						then	if [ -n "${config_server}" ] && [ ! "${config_target}" == "local" ]
 								then	probe=$(ssh ${config_server}${config_port} "find ${snap_set[aa]}${snap_file[aa]}${snap_string_complete}${snap_file_type[aa]} -maxdepth 0 2> /dev/null")
 								else	probe=$(find ${snap_set[aa]}${snap_file[aa]}${snap_string_complete}${snap_file_type[aa]} -maxdepth 0 2> /dev/null)
@@ -363,11 +363,13 @@ do	aa=$((${aa} + 1))
 						elif [ "${mode_create}" == "btrfs" ]
 							then	command="${config_ssh_part1}btrfs subvolume snapshot -r ${root_set[aa]} ${snap_set[aa]}${snap_string_complete}${config_ssh_part2}"
 
-						elif [ -n "${config_certificate}" ] && [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ]
+						elif [ -n "${config_certificate}" ] && [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ] || [ "${mode_create}" == "pgsql" ]
 							then	if [ "${mode_create}" == "file" ]
 									then	command_part1="cat ${root_set[aa]}${snap_encrypt}"
 									elif [ "${mode_create}" == "mysql" ]
 										then	command_part1="mysqldump --defaults-extra-file=${config_credentials} --routines --triggers --single-transaction ${snap_file[aa]}${snap_encrypt}"
+									elif [ "${mode_create}" == "pgsql" ]
+										then	command_part1="pg_dump -h localhost -U ${config_credentials} -C -F c ${snap_file[aa]}${snap_encrypt}"
 								fi
 
 								command_part2="cat > ${snap_set[aa]}${snap_file[aa]}${snap_string_complete}${snap_file_type[aa]}${change_user[aa]}"
@@ -416,7 +418,7 @@ do	aa=$((${aa} + 1))
 											fi
 									fi
 
-								elif [ "${mode_create}" == "btrfs" ] || [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ]
+								elif [ "${mode_create}" == "btrfs" ] || [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ] || [ "${mode_create}" == "pgsql" ]
 									then	if [ -n "${config_server}" ] && [ ! "${config_target}" == "local" ]
 											then	snap_shots_strict=$(ssh ${config_server}${config_port} "find ${snap_set[aa]}${snap_file[aa]}${snap_string_separator_1}${snap_name}* -maxdepth 0 2> /dev/null")
 											else	snap_shots_strict=$(find ${snap_set[aa]}${snap_file[aa]}${snap_string_separator_1}${snap_name}* -maxdepth 0 2> /dev/null)
@@ -442,7 +444,7 @@ do	aa=$((${aa} + 1))
 									elif [ "${mode_create}" == "btrfs" ]
 										then	command="${config_ssh_part1}btrfs subvolume delete ${snap_del}${config_ssh_part2}"
 
-									elif [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ]
+									elif [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ] || [ "${mode_create}" == "pgsql" ]
 										then	if [ -n "${config_server}" ] && [ ! "${config_target}" == "local" ]
 												then	command="${config_ssh_part1}rm -rf ${snap_del}${config_ssh_part2}"
 												else	command="rm -rf ${snap_del}"
