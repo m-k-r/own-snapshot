@@ -24,7 +24,7 @@ parameter used by ownbackup
  -m	mode (btrfs, zfs)
  -o	target for snapshot
  -p	port for ssh
- -q	path to credentials file for mysql
+ -q	path to credentials file for sql
  -r	source for snapshot
  -s	server
  -z	certificate file"
@@ -260,18 +260,24 @@ if [ -n "${config_server}" ]
 		unset config_target
 fi
 
-if [ "${mode_create}" == "pipe" ]
-	then	if [ -n "${config_certificate}" ]
-			then	snap_encrypt=" | openssl smime -encrypt -binary -text -aes256 -outform DER ${config_certificate}"
-		fi
+if [ "${mode_create}" == "pipe" ] && [ -n "${config_certificate}" ]
+	then	snap_encrypt=" | openssl smime -encrypt -binary -text -aes256 -outform DER ${config_certificate}"
+fi
 
-		#set back the control variable
+if [ "${mode_create}" == "pipe" ] || [ "${mode_create}" == "rsync" ]
+	then	#set back the control variable
 		aa="-1"
 
 		# mode_create=pipe use chown to set a specific user. And since they are file-based they might have dot-sepparated file-types. It is convenient if this stays at the end.
 		for root_set_element in "${root_set[@]}"
 		do	aa=$((${aa} + 1))
-			snap_file[aa]=$(echo "${root_set_element}" | rev | cut -d "/" -f 1 | rev)
+
+			probe=$(echo ${snap_set[aa]} | rev | cut -c 1)
+			if [ ! "${probe}" == "/" ]
+				then	snap_file[aa]=$(echo "${snap_set[aa]}" | rev | cut -d "/" -f 1 | rev)
+					snap_set[aa]=$(echo "${snap_set[aa]}" | rev | cut -d "/" -f 2- | rev)/
+				else	snap_file[aa]=$(echo "${root_set_element}" | rev | cut -d "/" -f 1 | rev)
+			fi
 
 			probe=$(echo "${snap_file[aa]}" | grep "\.")
 			if [ -n "${probe}" ]
@@ -354,7 +360,7 @@ do	aa=$((${aa} + 1))
 
 	if [ ! -z "${snap_limit[aa]}" ] && [ ! "${snap_limit[aa]}" == "0" ]
 		then	if [ "${check_commands}" == "set" ]
-				then	printf -- "\n--------------- ${snap_set_element} ---------------\n"
+				then	printf -- "\n--------------- ${snap_set_element}${snap_file[aa]}${snap_string_complete}${snap_file_type[aa]} ---------------\n"
 			fi
 
 			if [ "${check_previous}" == "set" ]
