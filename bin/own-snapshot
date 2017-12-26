@@ -2,8 +2,8 @@
 #
 # -----------------------------------------------------------------------------
 #
-# Marcel Keller
-# Usage: uses config files to create and delete snapshots for btrfs, zfs, file, directory, mysql, pgsql and kvm
+# Author:	Marcel Keller (m-k-r)
+# Usage:	uses config files to create and delete snapshots for btrfs, zfs, file, directory, mysql, pgsql and kvm
 # License:	GPLv3 http://www.gnu.org/licenses/gpl-3.0
 #
 # ----------------------------- Global Variables ------------------------------
