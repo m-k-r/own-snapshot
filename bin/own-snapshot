@@ -38,11 +38,9 @@ if [ "$#" == "0" ]
 	then	echo "${usage}" && exit 0
 fi
 
-while getopts ":c:d:e:f:l:m:o:p:q:r:s:z:vh" opt; do
+while getopts ":c:d:e:f:l:m:n:o:p:q:r:s:z:vh" opt; do
 	case ${opt} in
 		c)	config=$OPTARG
-			;;
-		d)	debug=$OPTARG
 			;;
 		e)	snapshots_existing_only=$OPTARG
 			;;
@@ -52,7 +50,9 @@ while getopts ":c:d:e:f:l:m:o:p:q:r:s:z:vh" opt; do
 			;;
 		m)	mode=$OPTARG
 			;;
-		o)	snap_set=($OPTARG)
+		n)	snap_set=($OPTARG)
+			;;
+		o)	output=$OPTARG
 			;;
 		p)	config_port=($OPTARG)
 			;;
@@ -78,40 +78,38 @@ done
 
 # -----------------------------------------------------------------------------
 
-## debug-level:
+## output-level:
 ##	previous:	checks if previous snapshot with the same name exists
 ##	commands:	show commands for snapshot & snapshot-deletion
+##	progress:	from own-backup will be translated to previous
 ##	snapvars:	from own-backup will be translated to commands
 ##	config:		checks if the configuration is valid
 ##	snapshots:	commands + show the snapshotlists, -numbers
 ##	full:		all the above
 
-# define debuglevel
-if [ -n "${debug}" ]
-	then	if [ "${debug}" == "config" ]
+# define outputlevel
+if [ -n "${output}" ]
+	then	if [ "${output}" == "config" ]
 			then	check_config="set"
 
-			elif [ "${debug}" == "previous" ]
+			elif [ "${output}" == "previous" ] || [ "${output}" == "progress" ]
 				then	check_previous="set"
 
-			elif [ "${debug}" == "commands" ]
+			elif [ "${output}" == "commands" ] || [ "${output}" == "snapvars" ]
 				then	check_commands="set"
 
-			elif [ "${debug}" == "snapvars" ]
-				then	check_commands="set"
-
-			elif [ "${debug}" == "snapshots" ]
+			elif [ "${output}" == "snapshots" ]
 				then	check_commands="set"
 					check_snapshots="set"
 					snapshots_existing_only=set
 
-			elif [ "${debug}" == "full" ]
+			elif [ "${output}" == "full" ]
 				then	check_config="set"
 					check_previous="set"
 					check_commands="set"
 					check_snapshots="set"
 
-			else	echo "no supported debug-level found: ${debug}" && exit 1
+			else	echo "no supported output-level found: ${output}" && exit 1
 		fi
 fi
 
@@ -268,7 +266,7 @@ if [ "${mode_create}" == "pipe" ] || [ "${mode_create}" == "rsync" ]
 	then	#set back the control variable
 		aa="-1"
 
-		# mode_create=pipe use chown to set a specific user. And since they are file-based they might have dot-sepparated file-types. It is convenient if this stays at the end.
+		# files may have dot-sepparated file-types. It is convenient if this stays at the end.
 		for root_set_element in "${root_set[@]}"
 		do	aa=$((${aa} + 1))
 
