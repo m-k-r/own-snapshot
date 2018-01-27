@@ -6,6 +6,7 @@ _own-snapshot() {
 
 	# define variables
 	dir_conf=/etc/own-snapshot/
+	offset=4
 
 	# define functions
 	__get_conf_name() {
