@@ -1,0 +1,41 @@
+_own-snapshot() {
+	local cur prev list
+	COMPREPLY=()
+	cur="${COMP_WORDS[COMP_CWORD]}"
+	prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+	# define variables
+	dir_conf=/etc/own-snapshot/
+
+	# define functions
+	__get_conf_name() {
+		file_conf=${dir_conf}${COMP_WORDS[$(echo ${COMP_WORDS[@]} | awk -v name='-c' '{for (i=1;i<=NF;i++) if ($i==name) print i; exit}')]}.conf
+	}
+
+	case "${prev}" in
+		-c)	list=$(find ${dir_conf} | grep "\.conf" | cut -d "/" -f ${offset}- | rev | cut -d "." -f 2- | rev)
+			;;
+		-e)	list="no_nmbr"
+			;;
+		-f)	if [[ -n "$(echo ${COMP_WORDS[@]} | grep '\-c')" ]] ; then
+				__get_conf_name
+				list=$(cat ${file_conf} | awk -v condition1="targetdir" '$1 == condition1 { print $0 }' | cut -f 3- | rev | cut -f 2- | rev)
+			fi
+			;;
+		-l)	if [[ -n "$(echo ${COMP_WORDS[@]} | grep '\-c')" ]] ; then
+				__get_conf_name
+				list=$(date +$(cat ${file_conf} | awk -v condition1="dateformat" '$1 == condition1 { print $3 }'))
+			fi
+			;;
+		-m)	list="btrfs zfs directory file kvm mysql pgsql"
+			;;
+		-o)	list="commands config full previous snapshots"
+			;;
+		*)	list="-c -e -f -l -m -n -o -p -q -r -s -z -v -h"
+			;;
+	esac
+
+	COMPREPLY=( $(compgen -W "${list}" -- ${cur}) )
+	return 0
+}
+complete -F _own-snapshot own-snapshot
