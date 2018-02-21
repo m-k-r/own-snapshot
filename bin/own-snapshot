@@ -311,9 +311,9 @@ if [ -n "${config_user}" ]
 fi
 
 # internally mode_create is not different from file execpt an additional / so that rsync doesn't copy the directory inside the target but change the name to it
-if [ "${mode_create}" == "directory" ]
+if [ "${mode}" == "directory" ]
 	then	config_options_rsync2="/"
-		mode_create=file
+		mode=file
 fi
 
 #set back the control variable
@@ -339,7 +339,7 @@ if [ "${check_config}" == "set" ]
 		done
 		aa="-1"
 
-		if [ "${mode_create}" == "file" ] || [ "${mode_create}" == "mysql" ] || [ "${mode_create}" == "pgsql" ]
+		if [ "${mode_create}" == "rsync" ] || [ "${mode_create}" == "pipe" ]
 			then	echo "user:group is: ${config_user}"
 				echo "the path to the certificate is: ${config_certificate}"
 				echo "the target for the snapshot is: ${config_target}. Valid is local, remote and empty"
