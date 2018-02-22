@@ -197,10 +197,10 @@ if [ "${config_function}" == "list" ]
 	else
 
 		if [ -n "${config_server}" ]
-			then	probe=$(echo ${server} | grep "~" || true)
+			then	probe=$(echo "${config_server}" | grep "~" || true)
 				if [ -n "${probe}" ]
-					then	config_target=$(echo ${config_server} | cut -d "~" -f 2)
-						config_server=$(echo ${config_server} | cut -d "~" -f 1)
+					then	config_target=$(echo "${config_server}" | cut -d "~" -f 2)
+						config_server=$(echo "${config_server}" | cut -d "~" -f 1)
 				fi
 		fi
 fi
@@ -238,7 +238,11 @@ if [ -n "${config_server}" ]
 			then	config_port=" -p ${config_port}"
 		fi
 
-		if [ ! "${mode_create}" == "pipe" ] || [ "${config_target}" == "server" ]
+		if  [ ! -n "${config_target}" ] || [ ! "${mode_snapshot}" == "file" ]
+			then config_target=server
+		fi
+
+		if [ "${config_target}" == "server" ]
 			then	config_ssh_source_part1="ssh ${config_server}${config_port} \""
 				config_ssh_source_part2="\""
 				config_ssh_target_part1="ssh ${config_server}${config_port} \""
@@ -248,9 +252,17 @@ if [ -n "${config_server}" ]
 				then	config_ssh_source_part1="ssh ${config_server}${config_port} \""
 					config_ssh_source_part2="\""
 
+					if [ "${mode_create}" == "rsync" ]
+						then	ssh_rsync_source="-e \"ssh${config_port}\" ${config_server}:"
+					fi
+
 			elif	[ "${config_target}" == "remote" ]
 				then	config_ssh_target_part1="ssh ${config_server}${config_port} \""
 					config_ssh_target_part2="\""
+
+					if [ "${mode_create}" == "rsync" ]
+						then	ssh_rsync_target="-e \"ssh${config_port}\" ${config_server}:"
+					fi
 
 			else	echo "something is wrong with the ssh settings" && exit 1
 		fi
@@ -334,7 +346,7 @@ if [ "${check_config}" == "set" ]
 		echo "Target, Snapshotnumer and Source are:"
 
 		for snap_set_element in "${snap_set[@]}"
-		do	aa=$((${aa} + 1)) 
+		do	aa=$((${aa} + 1))
 			echo "${snap_set[aa]}${snap_file[aa]}${snap_string_complete}${snap_file_type[aa]} ${snap_limit[aa]} ${root_set[aa]}"
 		done
 		aa="-1"
@@ -423,7 +435,7 @@ do	aa=$((${aa} + 1))
 								command="${config_ssh_source_part1}${command_part1}${config_ssh_source_part2} | ${config_ssh_target_part1}${command_part2}${config_ssh_target_part2}"
 
 						elif [ "${mode_create}" == "rsync" ]
-							then	command="${config_ssh_source_part1}rsync ${config_options_rsync} '${root_set[aa]}'${config_options_rsync2} '${snap_set[aa]}''${snap_file[aa]}'${snap_string_complete}${snap_file_type[aa]}${change_user[aa]} ${config_ssh_source_part2}"
+							then	command="rsync ${config_options_rsync} ${ssh_rsync_source}'${root_set[aa]}'${config_options_rsync2} ${ssh_rsync_target}'${snap_set[aa]}''${snap_file[aa]}'${snap_string_complete}${snap_file_type[aa]}${change_user[aa]}"
 
 						elif [ "${mode_create}" == "kvm" ]
 							then	command="${config_ssh_source_part1}qm snapshot '${root_set[aa]}' ${snap_string}${config_ssh_source_part2}"
