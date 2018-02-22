@@ -197,10 +197,10 @@ if [ "${config_function}" == "list" ]
 	else
 
 		if [ -n "${config_server}" ]
-			then	probe=$(echo ${server} | grep "#" || true)
+			then	probe=$(echo ${server} | grep "~" || true)
 				if [ -n "${probe}" ]
-					then	config_target=$(echo ${config_server} | cut -d "#" -f 2)
-						config_server=$(echo ${config_server} | cut -d "#" -f 1)
+					then	config_target=$(echo ${config_server} | cut -d "~" -f 2)
+						config_server=$(echo ${config_server} | cut -d "~" -f 1)
 				fi
 		fi
 fi
