@@ -247,6 +247,9 @@ if [ -n "${config_server}" ]
 				config_ssh_source_part2="\""
 				config_ssh_target_part1="ssh ${config_server}${config_port} \""
 				config_ssh_target_part2="\""
+				if [ "${mode_create}" == "rsync" ]
+					then	echo "rsync needs one side to be local. This does not work" && exit 1
+				fi
 
 			elif	[ "${config_target}" == "local" ]
 				then	config_ssh_source_part1="ssh ${config_server}${config_port} \""
