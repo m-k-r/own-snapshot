@@ -247,9 +247,6 @@ if [ -n "${config_server}" ]
 				config_ssh_source_part2="\""
 				config_ssh_target_part1="ssh ${config_server}${config_port} \""
 				config_ssh_target_part2="\""
-				if [ "${mode_create}" == "rsync" ]
-					then	echo "rsync needs one side to be local. This does not work" && exit 1
-				fi
 
 			elif	[ "${config_target}" == "local" ]
 				then	config_ssh_source_part1="ssh ${config_server}${config_port} \""
@@ -438,7 +435,10 @@ do	aa=$((${aa} + 1))
 								command="${config_ssh_source_part1}${command_part1}${config_ssh_source_part2} | ${config_ssh_target_part1}${command_part2}${config_ssh_target_part2}"
 
 						elif [ "${mode_create}" == "rsync" ]
-							then	command="rsync ${config_options_rsync} ${ssh_rsync_source}'${root_set[aa]}'${config_options_rsync2} ${ssh_rsync_target}'${snap_set[aa]}''${snap_file[aa]}'${snap_string_complete}${snap_file_type[aa]}${change_user[aa]}"
+							then	if [ -n "${ssh_rsync_source}" ] || [ -n "${ssh_rsync_target}" ]
+									then	command="rsync ${config_options_rsync} ${ssh_rsync_source}'${root_set[aa]}'${config_options_rsync2} ${ssh_rsync_target}'${snap_set[aa]}''${snap_file[aa]}'${snap_string_complete}${snap_file_type[aa]}${change_user[aa]}"
+									else	command="${config_ssh_source_part1}rsync ${config_options_rsync} '${root_set[aa]}'${config_options_rsync2} '${snap_set[aa]}''${snap_file[aa]}'${snap_string_complete}${snap_file_type[aa]}${change_user[aa]}${config_ssh_source_part2}"
+								fi
 
 						elif [ "${mode_create}" == "kvm" ]
 							then	command="${config_ssh_source_part1}qm snapshot '${root_set[aa]}' ${snap_string}${config_ssh_source_part2}"
