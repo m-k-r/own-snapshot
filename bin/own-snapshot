@@ -216,7 +216,8 @@ if [ -n "${mode}" ]
 					mode_snapshot=file
 
 			elif [ "${mode}" == "mysql" ] || [ "${mode}" == "pgsql" ]
-				then	mode_create=pipe
+				then	config_sql_server=localhost
+					mode_create=pipe
 					mode_snapshot=file
 
 			elif [ "${mode}" == "file" ]
@@ -263,6 +264,9 @@ if [ -n "${config_server}" ]
 					if [ "${mode_create}" == "rsync" ]
 						then	ssh_rsync_target="-e \"ssh${config_port}\" ${config_server}:"
 					fi
+
+			elif	[ "${config_target}" == "direct" ]
+					then	config_sql_server=${config_server}
 
 			else	echo "something is wrong with the ssh settings" && exit 1
 		fi
@@ -426,9 +430,9 @@ do	aa=$((${aa} + 1))
 							then	if [ "${mode}" == "file" ]
 									then	command_part1="cat '${root_set[aa]}'${snap_encrypt}"
 									elif [ "${mode}" == "mysql" ]
-										then	command_part1="mysqldump --defaults-extra-file=${config_credentials} --routines --triggers --single-transaction '${snap_file[aa]}'${snap_encrypt}"
+										then	command_part1="mysqldump --defaults-extra-file=${config_credentials} --routines --triggers --single-transaction -h ${config_sql_server} '${snap_file[aa]}'${snap_encrypt}"
 									elif [ "${mode}" == "pgsql" ]
-										then	command_part1="pg_dump -h localhost -U ${config_credentials} -C -F c '${snap_file[aa]}'${snap_encrypt}"
+										then	command_part1="pg_dump -h ${config_sql_server} -U ${config_credentials} -C -F c '${snap_file[aa]}'${snap_encrypt}"
 								fi
 
 								command_part2="cat > '${snap_set[aa]}''${snap_file[aa]}'${snap_string_complete}${snap_file_type[aa]}${change_user[aa]}"
