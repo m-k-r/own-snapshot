@@ -27,7 +27,7 @@ parameter used by ownbackup
  -q	path to credentials file for sql
  -r	source for snapshot
  -s	server
- -z	certificate file"
+ -z	certificate file/gpg id"
 conf_dir="/etc/own-snapshot/"
 mode_supported="btrfs zfs directory file kvm mysql pgsql"
 config_options_rsync="-a"
@@ -271,7 +271,12 @@ if [[ -n "${config_server}" ]]; then
 fi
 
 if [[ "${mode_create}" == "pipe" ]] && [[ -n "${config_certificate}" ]]; then
-	snap_encrypt=" | openssl smime -encrypt -binary -text -aes256 -outform DER ${config_certificate}"
+	# if config_certificate is a ssl certificate it is always a path. this way it is compatible with the current config file
+	probe=$(echo ${config_certificate} | rev | cut -c 1)
+	if [[ "${probe}" == "/" ]]; then
+		snap_encrypt=" | openssl smime -encrypt -binary -text -aes256 -outform DER ${config_certificate}"; else
+		snap_encrypt=" | gpg -r ${config_certificate} -e"
+	fi
 fi
 
 if [[ "${mode_create}" == "pipe" ]] || [[ "${mode_create}" == "rsync" ]]; then
