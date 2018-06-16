@@ -29,7 +29,7 @@ parameter used by ownbackup
  -s	server
  -z	certificate file/gpg id"
 conf_dir="/etc/own-snapshot/"
-mode_supported="btrfs zfs directory file kvm mysql pgsql"
+mode_supported="btrfs zfs directory file kvm lxd mysql pgsql"
 config_options_rsync="-a"
 
 # --------------------------------- Parameter ----------------------------------
@@ -205,7 +205,7 @@ fi
 
 # translate mode to mode_create and mode_snapshot
 if [[ -n "${mode}" ]]; then
-	if [[ "${mode}" == "btrfs" ]] || [[ "${mode}" == "kvm" ]] || [[ "${mode}" == "zfs" ]]; then
+	if [[ "${mode}" == "btrfs" ]] || [[ "${mode}" == "kvm" ]] || [[ "${mode}" == "lxd" ]] || [[ "${mode}" == "zfs" ]]; then
 		mode_create=${mode}
 		mode_snapshot=${mode}
 
@@ -407,6 +407,12 @@ do	aa=$((${aa} + 1))
 					fi
 				fi
 
+			elif [[ "${mode_snapshot}" == "lxd" ]]; then
+				if [[ -n "${config_ssh_source_part1}" ]]; then
+					probe=$(ssh ${config_server}${config_port} "lxc info '${snap_set[aa]}'" | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' | grep '${snap_set[aa]}'${snap_string_complete} 2> /dev/null); else
+					probe=$(lxc info "${snap_set[aa]}" | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' | grep '${snap_set[aa]}'${snap_string_complete} 2> /dev/null)
+				fi
+
 			elif [[ "${mode_snapshot}" == "kvm" ]]; then
 				if [[ -n "${config_ssh_source_part1}" ]]; then
 					probe=$(ssh ${config_server}${config_port} "qm listsnapshot '${root_set[aa]}' | grep ${snap_string} 2> /dev/null"); else
@@ -445,6 +451,9 @@ do	aa=$((${aa} + 1))
 					command="${config_ssh_source_part1}rsync ${config_options_rsync} '${root_set[aa]}'${config_options_rsync2} '${snap_set[aa]}''${snap_file[aa]}'${snap_string_complete}${snap_file_type[aa]}${change_user[aa]}${config_ssh_source_part2}"
 				fi
 
+			elif [[ "${mode_create}" == "lxd" ]]; then
+				command="${config_ssh_source_part1}lxc snapshot '${snap_set[aa]}' '${snap_set[aa]}'${snap_string_complete}${config_ssh_source_part2}"
+
 			elif [[ "${mode_create}" == "kvm" ]]; then
 				command="${config_ssh_source_part1}qm snapshot '${root_set[aa]}' ${snap_string}${config_ssh_source_part2}"
 			fi
@@ -479,6 +488,13 @@ do	aa=$((${aa} + 1))
 						snap_shots_strict=$(find "${snap_set[aa]}""${snap_file[aa]}"${snap_string_separator_1}${snap_name}* -maxdepth 0 2> /dev/null)
 					fi
 
+				elif [[ "${mode_snapshot}" == "lxd" ]]; then
+					if [[ -n "${config_ssh_target_part1}" ]]; then
+						snap_shots_strict=$(ssh ${config_server}${config_port} "lxc info '${snap_set[aa]}' | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' 2> /dev/null"); else
+						snap_shots_strict=$(lxc info "${snap_set[aa]}" | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' 2> /dev/null)
+					fi
+
+
 				elif [[ "${mode_snapshot}" == "kvm" ]]; then
 					if [[ -n "${config_ssh_target_part1}" ]]; then
 						snap_shots_strict=$(ssh ${config_server}${config_port} "qm listsnapshot '${root_set[aa]}' | awk '{print $1}' | grep ${snap_name} 2> /dev/null"); else
@@ -506,6 +522,9 @@ do	aa=$((${aa} + 1))
 
 					elif [[ "${mode_create}" == "rsync" ]] || [[ "${mode_create}" == "pipe" ]]; then
 						command="${config_ssh_target_part1}rm -rf '${snap_del}'${config_ssh_target_part2}"
+
+					elif [[ "${mode_create}" == "lxd" ]]; then
+						command="${config_ssh_target_part1}lxc delete '${snap_set[aa]}'/'${snap_del}'${config_ssh_target_part2}"
 					fi
 
 					snap_shots_strict=$(echo "${snap_shots_strict}" | tail -n +2)
