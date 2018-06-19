@@ -233,7 +233,14 @@ fi
 
 if [[ -n "${config_server}" ]]; then
 	if [[ -n "${config_port}" ]]; then
-		config_port=" -p ${config_port}"
+		config_port=" -p ${config_port}"; else
+		config_port=" -p 22"
+	fi
+
+	probe=$(ssh -O check -S ~/.ssh/%C  -p "${config_port}" "${config_server}" 2>&1 | grep 'No such file or directory')
+	if [[ -n "${probe}" ]]; then
+		# if not already exists, establish master connection for ssh. this will automatically close 1 minute after the script
+		ssh -Nf -p "${config_port}" "${config_server}" -o ControlMaster=auto -o ControlPath=~/.ssh/%C -o ControlPersist=1m
 	fi
 
 	if  [[ ! -n "${config_target}" ]] || [[ ! "${mode_snapshot}" == "file" ]]; then
@@ -241,25 +248,25 @@ if [[ -n "${config_server}" ]]; then
 	fi
 
 	if [[ "${config_target}" == "server" ]]; then
-		config_ssh_source_part1="ssh ${config_server}${config_port} \""
+		config_ssh_source_part1="ssh -S ~/.ssh/%C ${config_server}${config_port} \""
 		config_ssh_source_part2="\""
-		config_ssh_target_part1="ssh ${config_server}${config_port} \""
+		config_ssh_target_part1="ssh -S ~/.ssh/%C ${config_server}${config_port} \""
 		config_ssh_target_part2="\""
 
 	elif	[[ "${config_target}" == "local" ]]; then
-		config_ssh_source_part1="ssh ${config_server}${config_port} \""
+		config_ssh_source_part1="ssh -S ~/.ssh/%C ${config_server}${config_port} \""
 		config_ssh_source_part2="\""
 
 		if [[ "${mode_create}" == "rsync" ]]; then
-			ssh_rsync_source="-e \"ssh${config_port}\" ${config_server}:"
+			ssh_rsync_source="-e \"ssh -S ~/.ssh/%C ${config_port}\" ${config_server}:"
 		fi
 
 	elif	[[ "${config_target}" == "remote" ]]; then
-		config_ssh_target_part1="ssh ${config_server}${config_port} \""
+		config_ssh_target_part1="ssh -S ~/.ssh/%C ${config_server}${config_port} \""
 		config_ssh_target_part2="\""
 
 		if [[ "${mode_create}" == "rsync" ]]; then
-			ssh_rsync_target="-e \"ssh${config_port}\" ${config_server}:"
+			ssh_rsync_target="-e \"ssh -S ~/.ssh/%C ${config_port}\" ${config_server}:"
 		fi
 
 	elif	[[ "${config_target}" == "direct" ]]; then
@@ -390,32 +397,32 @@ do	aa=$((${aa} + 1))
 		if [[ "${check_previous}" == "set" ]]; then
 			if [[ "${mode_snapshot}" == "btrfs" ]] || [[ "${mode_snapshot}" == "file" ]]; then
 				if [[ -n "${config_ssh_source_part1}" ]]; then
-					probe=$(ssh ${config_server}${config_port} "find "${snap_set[aa]}""${snap_file[aa]}"${snap_string_complete}${snap_file_type[aa]} -maxdepth 0 2> /dev/null"); else
+					probe=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "find "${snap_set[aa]}""${snap_file[aa]}"${snap_string_complete}${snap_file_type[aa]} -maxdepth 0 2> /dev/null"); else
 					probe=$(find "${snap_set[aa]}""${snap_file[aa]}"${snap_string_complete}${snap_file_type[aa]} -maxdepth 0 2> /dev/null)
 				fi
 
 			elif [[ "${mode_snapshot}" == "zfs" ]]; then
 				if [[ ! -z ${root_set[aa]} ]]; then
 					if [[ -n "${config_ssh_source_part1}" ]]; then
-						probe=$(ssh ${config_server}${config_port} "find '${root_set[aa]}'/.zfs/snapshot/${snap_string} -maxdepth 0 2> /dev/null"); else
+						probe=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "find '${root_set[aa]}'/.zfs/snapshot/${snap_string} -maxdepth 0 2> /dev/null"); else
 						probe=$(find "${root_set[aa]}"/.zfs/snapshot/${snap_string} -maxdepth 0 2> /dev/null)
 					fi; else
 
 					if [[ -n "${config_ssh_source_part1}" ]]; then
-						probe=$(ssh ${config_server}${config_port}${config_port} "zfs list -t snapshot | grep '${snap_set[aa]}'${snap_string_complete}"); else
+						probe=$(ssh -S ~/.ssh/%C ${config_server}${config_port} ${config_port} "zfs list -t snapshot | grep '${snap_set[aa]}'${snap_string_complete}"); else
 						probe=$(zfs list -t snapshot | grep "${snap_set[aa]}"${snap_string_complete})
 					fi
 				fi
 
 			elif [[ "${mode_snapshot}" == "lxd" ]]; then
 				if [[ -n "${config_ssh_source_part1}" ]]; then
-					probe=$(ssh ${config_server}${config_port} "lxc info '${snap_set[aa]}'" | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' | grep '${snap_set[aa]}'${snap_string_complete} 2> /dev/null); else
+					probe=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "lxc info '${snap_set[aa]}'" | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' | grep '${snap_set[aa]}'${snap_string_complete} 2> /dev/null); else
 					probe=$(lxc info "${snap_set[aa]}" | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' | grep '${snap_set[aa]}'${snap_string_complete} 2> /dev/null)
 				fi
 
 			elif [[ "${mode_snapshot}" == "kvm" ]]; then
 				if [[ -n "${config_ssh_source_part1}" ]]; then
-					probe=$(ssh ${config_server}${config_port} "qm listsnapshot '${root_set[aa]}' | grep ${snap_string} 2> /dev/null"); else
+					probe=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "qm listsnapshot '${root_set[aa]}' | grep ${snap_string} 2> /dev/null"); else
 					probe=$(qm listsnapshot "${root_set[aa]}" | grep ${snap_string} 2> /dev/null)
 				fi
 			fi
@@ -471,33 +478,32 @@ do	aa=$((${aa} + 1))
 				if [[ "${mode_snapshot}" == "zfs" ]]; then
 					if [[ ! -z ${root_set[aa]} ]]; then
 						if [[ -n "${config_ssh_target_part1}" ]]; then
-							snap_shots_strict=$(ssh ${config_server}${config_port} "find '${root_set[aa]}'/.zfs/snapshot/${snap_name}* -maxdepth 0 -printf "%f\n" 2> /dev/null"); else
+							snap_shots_strict=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "find '${root_set[aa]}'/.zfs/snapshot/${snap_name}* -maxdepth 0 -printf "%f\n" 2> /dev/null"); else
 							snap_shots_strict=$(find "${root_set[aa]}"/.zfs/snapshot/${snap_name}* -maxdepth 0 -printf "%f\n" 2> /dev/null)
 						fi
 						snap_shots_strict=$(echo "${snap_shots_strict}" | sed "s;${snap_name};${snap_set[aa]}@${snap_name};g" 2> /dev/null); else
 
 						if [[ -n "${config_ssh_target_part1}" ]]; then
-							snap_shots_strict=$(ssh ${config_server}${config_port} "zfs list -t snapshot" | grep '${snap_set[aa]}'${snap_string_separator_1}${snap_name} | awk '{ print $1 }'); else
+							snap_shots_strict=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "zfs list -t snapshot" | grep '${snap_set[aa]}'${snap_string_separator_1}${snap_name} | awk '{ print $1 }'); else
 							snap_shots_strict=$(zfs list -t snapshot | grep "${snap_set[aa]}"${snap_string_separator_1}${snap_name} | awk '{ print $1 }')
 						fi
 					fi
 
 				elif [[ "${mode_snapshot}" == "btrfs" ]] || [[ "${mode_snapshot}" == "file" ]]; then
 					if [[ -n "${config_ssh_target_part1}" ]]; then
-						snap_shots_strict=$(ssh ${config_server}${config_port} "find '${snap_set[aa]}''${snap_file[aa]}'${snap_string_separator_1}${snap_name}* -maxdepth 0 2> /dev/null"); else
+						snap_shots_strict=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "find '${snap_set[aa]}''${snap_file[aa]}'${snap_string_separator_1}${snap_name}* -maxdepth 0 2> /dev/null"); else
 						snap_shots_strict=$(find "${snap_set[aa]}""${snap_file[aa]}"${snap_string_separator_1}${snap_name}* -maxdepth 0 2> /dev/null)
 					fi
 
 				elif [[ "${mode_snapshot}" == "lxd" ]]; then
 					if [[ -n "${config_ssh_target_part1}" ]]; then
-						snap_shots_strict=$(ssh ${config_server}${config_port} "lxc info '${snap_set[aa]}' | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' 2> /dev/null"); else
+						snap_shots_strict=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "lxc info '${snap_set[aa]}' | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' 2> /dev/null"); else
 						snap_shots_strict=$(lxc info "${snap_set[aa]}" | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' 2> /dev/null)
 					fi
 
-
 				elif [[ "${mode_snapshot}" == "kvm" ]]; then
 					if [[ -n "${config_ssh_target_part1}" ]]; then
-						snap_shots_strict=$(ssh ${config_server}${config_port} "qm listsnapshot '${root_set[aa]}' | awk '{print $1}' | grep ${snap_name} 2> /dev/null"); else
+						snap_shots_strict=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "qm listsnapshot '${root_set[aa]}' | awk '{print $1}' | grep ${snap_name} 2> /dev/null"); else
 						snap_shots_strict=$(qm listsnapshot "${root_set[aa]}" | awk '{print $1}' | grep ${snap_name} 2> /dev/null)
 					fi
 				fi
