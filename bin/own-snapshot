@@ -279,7 +279,7 @@ fi
 
 if [[ "${mode_create}" == "pipe" ]] && [[ -n "${config_certificate}" ]]; then
 	# if config_certificate is a ssl certificate it is always a path. this way it is compatible with the current config file
-	probe=$(echo ${config_certificate} | rev | cut -c 1)
+	probe=$(echo ${config_certificate} | cut -c 1)
 	if [[ "${probe}" == "/" ]]; then
 		snap_encrypt=" | openssl smime -encrypt -binary -text -aes256 -outform DER ${config_certificate}"; else
 		snap_encrypt=" | gpg -r ${config_certificate} -e"
