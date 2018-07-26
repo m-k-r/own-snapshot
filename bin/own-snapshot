@@ -29,7 +29,7 @@ parameter used by ownbackup
  -s	server
  -z	certificate file/gpg id"
 conf_dir="/etc/own-snapshot/"
-mode_supported="btrfs zfs directory file kvm lxd mysql pgsql"
+mode_supported="btrfs zfs directory file kvm lxd mysql pgsql ldap"
 config_options_rsync="-a"
 
 # --------------------------------- Parameter ----------------------------------
@@ -213,7 +213,7 @@ if [[ -n "${mode}" ]]; then
 		mode_create=rsync
 		mode_snapshot=file
 
-	elif [[ "${mode}" == "mysql" ]] || [[ "${mode}" == "pgsql" ]]; then
+	elif [[ "${mode}" == "mysql" ]] || [[ "${mode}" == "pgsql" ]] || [[ "${mode}" == "ldap" ]]; then
 		config_sql_server=localhost
 		mode_create=pipe
 		mode_snapshot=file
@@ -447,6 +447,9 @@ do	aa=$((${aa} + 1))
 					command_part1="mysqldump --defaults-extra-file=${config_credentials} --routines --triggers --single-transaction -h ${config_sql_server} '${snap_file[aa]}'${snap_encrypt}"
 				elif [[ "${mode}" == "pgsql" ]]; then
 					command_part1="pg_dump -h ${config_sql_server} -U ${config_credentials} -C -F c '${snap_file[aa]}'${snap_encrypt}"
+
+				elif [[ "${mode}" == "ldap" ]]; then
+					command_part1="slapcat -n '${root_set[aa]}'"
 				fi
 
 				command_part2="cat > '${snap_set[aa]}''${snap_file[aa]}'${snap_string_complete}${snap_file_type[aa]}${change_user[aa]}"
