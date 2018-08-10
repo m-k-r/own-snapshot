@@ -280,7 +280,7 @@ fi
 if [[ "${mode_create}" == "pipe" ]] && [[ -n "${config_certificate}" ]]; then
 	# if config_certificate is a ssl certificate it is always a path. this way it is compatible with the current config file
 	probe=$(echo ${config_certificate} | cut -c 1)
-	if [[ "${probe}" == "/" ]]; then
+	if [[ "${probe}" == "/" ]] || [[ "${probe}" == "~" ]]; then
 		snap_encrypt=" | openssl smime -encrypt -binary -text -aes256 -outform DER ${config_certificate}"; else
 		snap_encrypt=" | gpg -r ${config_certificate} -e"
 	fi
@@ -295,11 +295,11 @@ if [[ "${mode_create}" == "pipe" ]] || [[ "${mode_create}" == "rsync" ]]; then
 	do	aa=$((${aa} + 1))
 
 		probe=$(echo ${snap_set[aa]} | rev | cut -c 1)
-		if [[ ! "${probe}" == "/" ]]; then
-			snap_file[aa]=$(echo "${snap_set[aa]}" | rev | cut -d "/" -f 1 | rev | tr "~" " ")
-			snap_set[aa]=$(echo "${snap_set[aa]}" | rev | cut -d "/" -f 2- | rev | tr "~" " ")/; else
+		if [[ "${probe}" == "/" ]]; then
 			snap_file[aa]=$(echo "${root_set_element}" | rev | cut -d "/" -f 1 | rev | tr "~" " ")
-			snap_set[aa]=$(echo "${snap_set[aa]}" | tr "~" " ")
+			snap_set[aa]=$(echo "${snap_set[aa]}" | tr "~" " ") ; else
+			snap_file[aa]=$(echo "${snap_set[aa]}" | rev | cut -d "/" -f 1 | rev | tr "~" " ")
+			snap_set[aa]=$(echo "${snap_set[aa]}" | rev | cut -d "/" -f 2- | rev | tr "~" " ")/
 		fi
 
 		probe=$(echo "${snap_file[aa]}" | grep "\.")
