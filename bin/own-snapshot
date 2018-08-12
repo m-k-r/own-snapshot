@@ -8,11 +8,12 @@
 #
 # ----------------------------- Global Variables ------------------------------
 
-version=1.0
+version=1.1
 usage="usage: own-snapshot [parameter]
 
- -c	name of the config file without '.conf' at the end
- -e	don't create new snapshots. used to handle snapshots or files created by other programms
+ -c	create initial config-directories, upgrade elements, create and change elements and jobs (not yet implemented)
+ -e	name of the element without '.snap'at the end
+ -i	impede new snapshots. used to handle snapshots or files created by other programms
  -f	the frequency as defined in the config file (hourly, daily, weekly)
  -l	either date-string (list) or complete label (single). mainly used by own-backup
  -o	output level: previous, commands, config, snapshots, full
@@ -28,9 +29,13 @@ parameter used by ownbackup
  -r	source for snapshot
  -s	server
  -z	certificate file/gpg id"
-conf_dir="/etc/own-snapshot/"
-mode_supported="btrfs zfs directory file kvm lxd mysql pgsql ldap"
+dir_root=/usr/local/own-snapshot
+dir_modules=${dir_root}/modules
+dir_conf=/etc/own-snapshot
 config_options_rsync="-a"
+supported_mode="btrfs zfs directory file kvm lxd mysql pgsql ldap"
+supported_element_version=1.1
+
 
 # --------------------------------- Parameter ----------------------------------
 
@@ -38,13 +43,15 @@ if [[ "$#" == "0" ]]; then
 	echo "${usage}" && exit 0
 fi
 
-while getopts ":c:e:f:l:m:n:o:p:q:r:s:z:vh" opt; do
+while getopts ":c:e:if:l:m:n:o:p:q:r:s:z:vh" opt; do
 	case ${opt} in
-		c)	config=$OPTARG
+		c)	arg_config=$OPTARG
 			;;
-		e)	snapshots_existing_only=$OPTARG
+		e)	arg_element=$OPTARG
 			;;
-		f)	snap_list_frequency=$OPTARG
+		i)	snap_new_impede=set
+			;;
+		f)	current_frequency=$OPTARG
 			;;
 		l)	snap_string=$OPTARG
 			;;
@@ -78,6 +85,16 @@ done
 
 # -----------------------------------------------------------------------------
 
+# backup ifs
+IFSBAK=${IFS}
+
+if [[ -n "${arg_config}" ]]; then
+	backend=snapshot
+	export dir_conf arg_config backend
+	${dir_modules}/do-config
+	exit 0
+fi
+
 ## output-level:
 ##	previous:	checks if previous snapshot with the same name exists
 ##	commands:	show commands for snapshot & snapshot-deletion
@@ -101,7 +118,7 @@ if [[ -n "${output}" ]]; then
 	elif [[ "${output}" == "snapshots" ]]; then
 		check_commands="set"
 		check_snapshots="set"
-		snapshots_existing_only=set
+		snap_new_impede=set
 
 	elif [[ "${output}" == "full" ]]; then
 		check_config="set"
@@ -114,9 +131,9 @@ if [[ -n "${output}" ]]; then
 fi
 
 # define the function and basic parameters
-if [[ -n "${config}" ]]; then
+if [[ -n "${arg_element}" ]]; then
 	config_function="list"
-	conf="${conf_dir}${config}.conf"; else
+	element=${dir_conf}/snapshot/${arg_element}.snap; else
 	config_function="single"
 	snap_limit=(1)
 fi
@@ -124,45 +141,52 @@ fi
 if [[ "${config_function}" == "list" ]]; then
 	# check if config is set
 	if [[ "$check_config" == "set" ]]; then
-		probe=$(find ${conf} 2>&1)
-		if [[ ! "${probe}" == "${conf}" ]]; then
+		probe=$(find ${element} 2>&1)
+		if [[ ! "${probe}" == "${element}" ]]; then
 			echo "the config does not exist" && exit 1
 		fi
 	fi
 
-	# get content of the config file
-	config_complete=$(head -9 ${conf})
-	config_table_snap=$(tail -n +10 ${conf})
-	config_credentials=$(sed -n 1p <<< "${config_complete}" | cut -d " " -f 3)
-	config_certificate=$(sed -n 2p <<< "${config_complete}" | cut -d " " -f 3)
-	config_user=$(sed -n 3p <<< "${config_complete}" | cut -d " " -f 3)
-	config_server=$(sed -n 4p <<< "${config_complete}" | cut -d " " -f 3)
-	config_target=$(sed -n 4p <<< "${config_complete}" | cut -d " " -f 4)
-	config_port=$(sed -n 4p <<< "${config_complete}" | cut -d " " -f 5)
-	mode=$(sed -n 5p <<< "${config_complete}" | cut -d " " -f 3)
-	snap_label=$(sed -n 6p <<< "${config_complete}" | cut -d " " -f 3)
-	snap_string_separator_1=$(sed -n 8p <<< "${config_complete}" | cut -d " " -f 3)
-	snap_string_separator_2=$(sed -n 8p <<< "${config_complete}" | cut -d " " -f 4)
-	snap_list_frequency_list=$(sed -n 9p <<< "${config_complete}")
+	# parse the blocks
+	block_config=$(awk '/^#config#$/ {flag=!flag; count+=1; next} flag && count < 2 {print}' ${element})
+	block_table=$(awk '/^#table#$/ {flag=!flag; count+=1; next} flag && count < 2 {print}' ${element})
+	# parse the blocks (into array) by newline, in case a source or target contains spaces
+	IFS=$'\n'
+	root_set=($(awk '/^#source#$/ {flag=!flag; count+=1; next} flag && count < 2 {print}' ${element}))
+	snap_set=($(awk '/^#target#$/ {flag=!flag; count+=1; next} flag && count < 2 {print}' ${element}))
+	IFS=${IFSBAK}
+
+	# check element version
+	element_version=$(awk -v condition1="version" '$1 == condition1 { print $3 }' <<< "${block_config}")
+	if [[ ! "${element_version}" == "${supported_element_version}" ]]; then
+		echo "the element has not the requiered version. please update the elements with own-snapshot -c upgrade" && exit 1
+	fi
+	config_server=$(awk -v condition1="server" '$1 == condition1 { print $3 }' <<< "${block_config}")
+	config_port=$(awk -v condition1="server" '$1 == condition1 { print $4 }' <<< "${block_config}")
+	mode=$(awk -v condition1="mode" '$1 == condition1 { print $3 }' <<< "${block_config}")
+	snap_label=$(awk -v condition1="label" '$1 == condition1 { print $3 }' <<< "${block_config}")
+	config_credentials=$(awk -v condition1="credentials" '$1 == condition1 { print $3 }' <<< "${block_config}")
+	config_certificate=$(awk -v condition1="encryption" '$1 == condition1 { print $3 }' <<< "${block_config}")
+	config_user=$(awk -v condition1="user" '$1 == condition1 { print $3 }' <<< "${block_config}")
+	snap_string_separator_1=$(awk -v condition1="separator" '$1 == condition1 { print $3 }' <<< "${block_config}")
+	snap_string_separator_2=$(awk -v condition1="separator" '$1 == condition1 { print $4 }' <<< "${block_config}")
+	config_target=$(awk -v condition1="snap_location" '$1 == condition1 { print $3 }' <<< "${block_config}")
+	config_archival=$(awk -v condition1="archival" '$1 == condition1 { print $0 }' <<< "${block_config}" | cut -d " " -f 3-)
 
 	# snap_string can be given by argument so that all snapshots follow the same scheme
 	if [[ -n "${snap_string}" ]]; then
 		snap_date=${snap_string}; else
-		snap_date=$(date +$(sed -n 7p <<< "${config_complete}" | cut -d " " -f 3))
+		snap_date=$(date +$(awk -v condition1="dateformat" '$1 == condition1 { print $3 }' <<< "${block_config}"))
 	fi
 
-	bb="0"
-	# get the current frequency of snapshots
-	for snap_list_frequency_list_element in ${snap_list_frequency_list}
-	do	bb=$((${bb} + 1))
-		if [[ "${snap_list_frequency_list_element}" == "${snap_list_frequency}" ]]; then
-			break
-		fi
-	done
-
-	if [[ ! "${snap_list_frequency_list_element}" == "${snap_list_frequency}" ]]; then
-		echo "frequency not found" >&2 && exit 1
+	# get snapshot table
+	supported_frequencies=$(head -n 1 <<< "${block_table}")
+	# get the retention number of snapshots for current frequency
+	snap_nmbr=$(awk -v name="${current_frequency}" '{for (i=1;i<=NF;i++) if ($i==name) print i; exit}' <<< "${supported_frequencies}")
+	if [[ ! -n "${snap_nmbr}" ]]; then
+		echo "frequency: ${current_frequency} not found. supported are: ${supported_frequencies}" >&2 && exit 1
 	fi
+	snap_limit=($(tail -n +2 <<< "${block_table}" | awk -v snap_nmbr="${snap_nmbr}" '{print $snap_nmbr}'))
 
 	# the snap_string_separators need to be flexible for handling date-based versioning from other sources
 	if [[ ! -n "${snap_string_separator_2}" ]]; then
@@ -171,28 +195,11 @@ if [[ "${config_function}" == "list" ]]; then
 		unset snap_string_separator_2
 	fi
 
-	# since the first field is the snap_set and the second is =, the snap_nmbr is 2 less then the field that has to be read
-	if [[ ! "${snapshots_existing_only}" == "no_nmbr" ]]; then
-		snap_nmbr=$((${bb} - 2))
-	fi
+	# get the names for the snapstring
 	snap_name="${snap_label}""${snap_nmbr}""${snap_string_separator_2}"
 	snap_string="${snap_name}""${snap_date}"
 
-	# Backup the ifs and change it. The internal field separator has to be changed teporarily so that the for-loop works line by line.
-	IFSBAK=${IFS}
-	IFS=$'\n'
-	aa="-1"
-
-	# get the datasets for snapshotting
-	for snap_line in ${config_table_snap}
-	do	aa=$((${aa} + 1))
-		snap_set[aa]=$(echo ${snap_line} | cut -f 1)
-		root_set[aa]=$(echo ${snap_line} | rev | cut -f 1 | rev)
-		snap_limit[aa]=$(echo ${snap_line} | cut -f ${bb})
-	done
-
-	unset bb conf config_complete config_table_snap snap_date
-	IFS=${IFSBAK}; else
+	unset element block_config block_table supported_frequencies; else
 
 	if [[ -n "${config_server}" ]]; then
 		probe=$(echo "${config_server}" | grep "~" || true)
@@ -230,7 +237,7 @@ if [[ -n "${mode}" ]]; then
 
 		mode_snapshot=file
 
-		else	echo "${mode} is not supported mode. Valid are: ${mode_supported}" && exit 1
+		else	echo "${mode} is not supported mode. Valid are: ${supported_mode}" && exit 1
 	fi; else
 	echo "no mode is set" && exit 1
 fi
@@ -356,7 +363,7 @@ if [[ "${check_config}" == "set" ]]; then
 		echo "Source is not set or empty" && exit 1
 	fi
 
-	echo "mode is: ${mode_create} and the frequency is: ${snap_list_frequency}"
+	echo "mode is: ${mode_create} and the frequency is: ${current_frequency}"
 	echo "label, frequency and date is: ${snap_string} with the length: ${snap_string_offset}"
 	echo "the sourceserver is: ${config_server}. Valid is an ip, a dns or empty"
 	echo "Target, Snapshotnumer and Source are:"
@@ -472,7 +479,7 @@ do	aa=$((${aa} + 1))
 			fi
 
 			# If snapshots not created by this script should be handled, existing_only can be set
-			if [[ ! -n "${snapshots_existing_only}" ]]; then
+			if [[ ! -n "${snap_new_impede}" ]]; then
 				if [[ "${check_commands}" == "set" ]]; then
 					echo "${command}"; else
 					eval ${command}

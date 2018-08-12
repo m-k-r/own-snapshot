@@ -1,38 +1,39 @@
 _own-snapshot() {
-	local cur prev list
+	local cur prev list dir_conf dir_current offset file_element
 	COMPREPLY=()
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 
 	# define variables
-	dir_conf=/etc/own-snapshot/
-	offset=4
+	dir_conf=/etc/own-snapshot
+	offset=5
+	dir_current=${dir_conf}/snapshot/
 
 	# define functions
-	__get_conf_name() {
-		file_conf=${dir_conf}${COMP_WORDS[$(echo ${COMP_WORDS[@]} | awk -v name='-c' '{for (i=1;i<=NF;i++) if ($i==name) print i; exit}')]}.conf
+	__get_element_name() {
+		file_element=${dir_current}${COMP_WORDS[$(echo ${COMP_WORDS[@]} | awk -v name='-e' '{for (i=1;i<=NF;i++) if ($i==name) print i; exit}')]}.snap
 	}
 
 	case "${prev}" in
-		-c)	list=$(find ${dir_conf} | grep "\.conf" | cut -d "/" -f ${offset}- | rev | cut -d "." -f 2- | rev)
+		-c)	list="cleanup initial rollback upgrade"
 			;;
-		-e)	list="no_nmbr"
+		-e)	list=$(find ${dir_current} | grep "\.snap" | cut -d "/" -f ${offset}- | rev | cut -d "." -f 2- | rev)
 			;;
-		-f)	if [[ -n "$(echo ${COMP_WORDS[@]} | grep '\-c')" ]] ; then
-				__get_conf_name
-				list=$(cat ${file_conf} | awk -v condition1="targetdir" '$1 == condition1 { print $0 }' | cut -f 3- | rev | cut -f 2- | rev)
+		-f)	if [[ -n "$(echo ${COMP_WORDS[@]} | grep '\-e')" ]] ; then
+				__get_element_name
+				list=$(cat ${file_element} | awk '/^#table#$/ {flag=!flag; count+=1; next} flag && count < 2 {print}' | head -n 1)
 			fi
 			;;
-		-l)	if [[ -n "$(echo ${COMP_WORDS[@]} | grep '\-c')" ]] ; then
-				__get_conf_name
-				list=$(date +$(cat ${file_conf} | awk -v condition1="dateformat" '$1 == condition1 { print $3 }'))
+		-l)	if [[ -n "$(echo ${COMP_WORDS[@]} | grep '\-e')" ]] ; then
+				__get_element_name
+				list=$(date +$(cat ${file_element} | awk -v condition1="dateformat" '$1 == condition1 { print $3 }'))
 			fi
 			;;
-		-m)	list="btrfs zfs directory file kvm mysql pgsql"
+		-m)	list="btrfs zfs directory file kvm lxd mysql pgsql ldap"
 			;;
 		-o)	list="commands config full previous snapshots"
 			;;
-		*)	list="-c -e -f -l -m -n -o -p -q -r -s -z -v -h"
+		*)	list="-c -e -i -f -l -m -n -o -p -q -r -s -z -v -h"
 			;;
 	esac
 

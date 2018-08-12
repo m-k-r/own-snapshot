@@ -1,0 +1,29 @@
+#config#
+version = 1.1
+server = testserver.testdomain.com 2222
+mode = btrfs/zfs/directory/file/kvm/lxd/mysql/pgsql/ldap
+label = auto-0
+dateformat = %Y%m%d-%H%M%S
+credentials = ~/.mysqldump.cnf
+encryption = /etc/ssl/mycert.pem
+user = testuser:testgroup
+separator = _ _
+snap_location = local
+archival = hourly daily weekly
+#config#
+
+#table#
+hourly	daily	weekly	monthly	yearly
+0	2	0	0	0
+0	2	0	0	0
+#table#
+
+#source#
+/
+/home
+#source#
+
+#target#
+/mnt/Pools/root-snapshots/root
+/mnt/Pools/root-snapshots/home
+#target#

@@ -1,0 +1,173 @@
+#!/bin/bash
+
+# ----------------------------- Global Variables -------------------------------
+
+dir_rollback=${dir_conf}/internal/rollback
+dir_upgrade=${dir_conf}/internal/upgrade
+dir_debug=${dir_conf}/debug
+dir_job=${dir_conf}/job
+dir_conf_offset=$(($(echo "${dir_conf}" | awk -F '/' '{print NF}') + 1))
+dir_rollback_offset=$(($(echo "${dir_rollback}" | awk -F '/' '{print NF}') + 1))
+
+# ------------------------------- Functions ------------------------------------
+
+function do-initial() {
+	echo "create initial structure in ${dir_conf}"
+	mkdir -p ${dir_debug} ${dir_element} ${dir_job} ${dir_rollback}
+	chmod 700 ${dir_debug} ${dir_element} ${dir_job} ${dir_rollback}
+
+	if [[ -d "${dir_conf}/upgrade" ]]; then
+		rsync -a ${dir_conf}/upgrade/* ${dir_rollback}/ 2> /dev/null
+		rm -rf ${dir_conf}/upgrade
+	fi
+}
+
+function do-backup() {
+	# check if the element has already be backuped by this script (for example if more then one version is upgraded)
+	probe=$(echo "${elements_backuped}" | grep ${element_matching})
+
+	if [[ -z "${probe}" ]]; then
+		# check if the element is in a subdirectory
+		probe=$(echo "${element_matching}" | grep "/")
+
+		# create (if not already exist) the subdirectory in dir_rollback
+		if [[ -n "${probe}" ]]; then
+			mkdir -p ${dir_rollback}/$(echo "${element_matching}" | rev | cut -d "/" -f 2- | rev)
+		fi
+
+		# actual backup of the element
+		if [[ "${version_current}" == "1.0" ]]; then
+			rsync -a ${dir_conf}/"${element_matching}".conf ${dir_rollback}/"${element_matching}".conf; else
+			rsync -a ${dir_element}/"${element_matching}"${file_extension} ${dir_rollback}/"${element_matching}"${file_extension}
+		fi
+
+		elements_backuped=${elements_backuped}$'\n'${element_matching}
+	fi
+}
+
+function do-cleanup() {
+	echo "delete all files in ${dir_debug} and ${dir_rollback}"
+	elements=$(find ${dir_rollback}/* 2> /dev/null && find ${dir_debug}/* 2> /dev/null | sed -e 's/^/deleting /')
+	echo "${elements}"
+	rm -rf ${dir_rollback}/*
+	rm -rf ${dir_debug}/*
+	echo "done"
+}
+
+function do-rollback() {
+	elements=$(find ${dir_rollback}/ | grep "${file_extension}")
+	for element in ${elements}
+	do	element=$(echo "${element}" | cut -d "/" -f ${dir_rollback_offset}- | rev | cut -d "." -f 2- | rev)
+		mv ${dir_rollback}/"${element}"${file_extension} ${dir_element}/"${element}"${file_extension}
+	done
+}
+
+function upgrade-elements() {
+	local elements_matching version_next
+	version_next=${1}
+	elements_matching=${2}
+	elements_matching_number=$(echo "${elements_matching}"| awk 'END{print NR}')
+
+	if [[ -n "${version_next}" ]]; then
+		check_complete=$(echo ${upgrade_complete} | grep "\b${version_next}\b")
+		if [[ -n "${check_complete}" ]]; then
+			# if a upgrade is complete, it has it's own messages and loop
+			eval upgrade${version_next}; else
+			#if not use the following frame
+			for element_matching in ${elements_matching}
+			do	do-backup
+				eval upgrade${version_next}
+			done
+
+			echo "${elements_matching_number} element(s) upgraded to version ${version_next}:"
+			echo "${elements_matching}"
+		fi; else
+		# if there is no version_next there is nothing to do
+		echo "no newer version to upgrade. have fun"
+	fi
+}
+
+function upgrade-framework() {
+	bb="0"
+
+	for version_current in ${version_list[@]}
+	do	echo "----------------------- search for version ${version_current} ------------------------"
+
+		probe=$(echo "${version_current}")
+		# get the next version
+		if [[ -n ${version_list[$((${bb} + 1))]} ]]; then
+			version_next=${version_list[$((${bb} + 1))]}
+		fi
+
+		# get elements. all direcotries up th the element_root have to be cut off
+		if [[ "${version_current}" == "1.0"  ]]; then
+			elements=$(find ${dir_conf}/ -type f | grep ".conf" | egrep -v "${dir_conf}/templates" | egrep -v "${dir_element}" | egrep -v "${dir_conf}/internal")
+			offset=${dir_conf_offset}; else
+			elements=$(find ${dir_element}/ -type f | grep "${file_extension}")
+			offset=${dir_element_offset}
+		fi
+
+		# check if the element has a version and if so, if it matches
+		if [[ -n "${elements}" ]]; then
+			for element in ${elements}
+			do	version_element=$(awk -v condition1="version" '$1 == condition1 { print $3 }' ${element})
+
+				if [ "${version_element}" == "${version_current}" ]; then
+					elements_matching+=$(echo "${element}" | cut -d "/" -f ${offset}- | rev | cut -d "." -f 2- | rev)$'\n'
+				elif [[ ! -n "${version_element}" ]]; then
+					elements_noversion+=$(echo "${element}" | cut -d "/" -f ${offset}- | rev | cut -d "." -f 2- | rev)$'\n'
+				fi
+			done
+
+			# if there are elements with no version try to update
+			if [[ "${version_current}" == "1.0" ]] && [[ -n "${elements_noversion}" ]]; then
+				elements_noversion=$(echo "${elements_noversion}" | grep -v '^$')
+				result=$(upgrade-elements 1.0 "${elements_noversion}")
+				echo "${result}"
+				probe=$(echo "${result}" | grep "element(s) upgraded to version ${version_current}")
+
+				if [[ -n "${probe}" ]]; then
+					elements_matching=${elements_noversion}
+				fi
+			fi
+			# update elements with the current version to the next
+			if [[ -n "${elements_matching}" ]]; then
+				elements_matching=$(echo "${elements_matching}" | grep -v '^$')
+				upgrade-elements "${version_next}" "${elements_matching}"; else
+				echo "no matching version found"
+			fi; else echo "no element found"
+		fi
+		unset version_next elements elements_matching elements_noversion elements_other
+		bb=$((${bb} + 1))
+	done
+}
+
+# --------------------------------- Upgrades -----------------------------------
+
+if [ "${backend}" == "backup" ]; then
+	source ${dir_upgrade}/upgrade_backup.list
+	dir_element=${dir_conf}/backup
+	file_extension=".bak";
+elif [[ "${backend}" == "snapshot" ]]; then
+	source ${dir_upgrade}/upgrade_snapshot.list
+	dir_element=${dir_conf}/snapshot
+	file_extension=".snap"
+fi
+dir_element_offset=$(($(echo "${dir_element}" | awk -F '/' '{print NF}') + 1))
+
+# ------------------------------ Main Script -----------------------------------
+
+if [[ "${arg_config}" == "upgrade" ]]; then
+	upgrade-framework;
+elif [[ "${arg_config}" == "initial" ]]; then
+	do-initial;
+elif [[ "${arg_config}" == "rollback" ]]; then
+	do-rollback;
+elif [[ "${arg_config}" == "cleanup" ]]; then
+	do-cleanup; else
+	echo "nothing to do" && exit 0
+fi
+
+##### variable list. these will be picked up by debug #####
+# import_fields = arg_config dir_conf backend
+# export_fields =

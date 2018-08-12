@@ -1,0 +1,79 @@
+# ----------------------------- Global Variables -------------------------------
+
+version_list=(1.0 1.1)
+upgrade_complete="1.1"
+
+# --------------------------------- Upgrades -----------------------------------
+
+function upgrade1.1 {
+	do-initial
+	for element_matching in ${elements_matching}
+	do	do-backup
+
+		# probe is set by do-backup
+		if [[ -n "${probe}" ]]; then
+			mkdir -p ${dir_element}/$(echo "${element_matching}" | rev | cut -d "/" -f 2- | rev)
+		fi
+
+		# copy the elements to the new directory
+		rsync -a ${dir_conf}/"${element_matching}".conf ${dir_element}/"${element_matching}"${file_extension}
+		sed -i "s;version = 1.0;version = 1.1;g" ${dir_element}/"${element_matching}"${file_extension} 2> /dev/null
+		rm -f ${dir_conf}/"${element_matching}".conf
+	done
+
+	echo "${elements_matching_number} element(s) upgraded to version ${version_next}:"
+	echo "${elements_matching}"
+}
+
+function upgrade1.0 {
+	# save custom settings
+	config_credentials=$(sed -n '/credentials =/p' ${dir_conf}/"${element_matching}".conf 2> /dev/null | cut -d " " -f 3-)
+	config_certificate=$(sed -n '/certificate =/p' ${dir_conf}/"${element_matching}".conf 2> /dev/null | cut -d " " -f 3-)
+	config_user=$(sed -n '/user =/p' ${dir_conf}/"${element_matching}".conf 2> /dev/null | cut -d " " -f 3-)
+	config_server=$(sed -n '/server =/p' ${dir_conf}/"${element_matching}".conf 2> /dev/null | cut -d " " -f 3)
+	config_port=$(sed -n '/server =/p' ${dir_conf}/"${element_matching}".conf 2> /dev/null | cut -d " " -f 5)
+	config_snap_location=$(sed -n '/server =/p' ${dir_conf}/"${element_matching}".conf 2> /dev/null | cut -d " " -f 4)
+	config_mode=$(sed -n '/mode =/p' ${dir_conf}/"${element_matching}".conf 2> /dev/null | cut -d " " -f 3-)
+	config_label=$(sed -n '/label =/p' ${dir_conf}/"${element_matching}".conf 2> /dev/null | cut -d " " -f 3-)
+	config_dateformat=$(sed -n '/dateformat =/p' ${dir_conf}/"${element_matching}".conf 2> /dev/null | cut -d " " -f 3-)
+	config_separator=$(sed -n '/separator =/p' ${dir_conf}/"${element_matching}".conf 2> /dev/null | cut -d " " -f 3-)
+	config_table=$(tail -n +9 ${dir_conf}/"${element_matching}".conf 2> /dev/null)
+
+	# get changes for new layout
+	if [[ -n "${config_port}" ]]; then
+		config_server="${config_server} ${config_port}"
+	fi
+
+	# get table
+	config_table_columns=$(head -n 1 <<< "${config_table}" | awk -F ' ' '{print NF}')
+	config_source=$(awk -v col=${config_table_columns} ' { print $col } ' <<< "${config_table}" | tail -n +2)
+	config_target=$(awk ' { print $1 } ' <<< "${config_table}" | tail -n +2)
+	config_table=$(cut -f 3-7 <<< "${config_table}")
+
+	# build new element
+	new_element="#config#"$'\n'
+	new_element+="version = 1.0"$'\n'
+	new_element+="server = ${config_server}"$'\n'
+	new_element+="mode = ${config_mode}"$'\n'
+	new_element+="label = ${config_label}"$'\n'
+	new_element+="dateformat = ${config_dateformat}"$'\n'
+	new_element+="credentials = ${config_credentials}"$'\n'
+	new_element+="encryption = ${config_certificate}"$'\n'
+	new_element+="user = ${config_user}"$'\n'
+	new_element+="separator = ${config_separator}"$'\n'
+	new_element+="snap_location = ${config_snap_location}"$'\n'
+	new_element+="archival ="$'\n'
+	new_element+="#config#"$'\n'$'\n'
+	new_element+="#table#"$'\n'
+	new_element+=${config_table}$'\n'
+	new_element+="#table#"$'\n'$'\n'
+	new_element+="#source#"$'\n'
+	new_element+=${config_source}$'\n'
+	new_element+="#source#"$'\n'$'\n'
+	new_element+="#target#"$'\n'
+	new_element+=${config_target}$'\n'
+	new_element+="#target#"$'\n'
+
+	# print new element to file
+	echo "${new_element}" > ${dir_conf}/"${element_matching}".conf 2> /dev/null
+}
