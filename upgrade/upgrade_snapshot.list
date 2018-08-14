@@ -1,9 +1,63 @@
 # ----------------------------- Global Variables -------------------------------
 
-version_list=(1.0 1.1)
+version_list=(1.0 1.1 1.2)
 upgrade_complete="1.1"
 
 # --------------------------------- Upgrades -----------------------------------
+
+function upgrade1.2 {
+	# get config block
+	block_config_old=$(awk '/^#config#$/ {flag=!flag; count+=1; next} flag && count < 2 {print}' ${dir_element}/"${element_matching}"${file_extension})
+	# save custom settings
+	element_server=$(sed -n '/^server =/p' <<< ${block_config_old} 2> /dev/null)
+	element_mode=$(sed -n '/^mode =/p' <<< ${block_config_old} 2> /dev/null)
+	element_label=$(sed -n '/^label =/p' <<< ${block_config_old} 2> /dev/null)
+	element_dateformat=$(sed -n '/^dateformat =/p' <<< ${block_config_old} 2> /dev/null)
+	element_credentials=$(sed -n '/^credentials =/p' <<< ${block_config_old} 2> /dev/null)
+	element_encryption=$(sed -n '/^encryption =/p' <<< ${block_config_old} 2> /dev/null)
+	element_user=$(sed -n '/^user =/p' <<< ${block_config_old} 2> /dev/null)
+	element_separator=$(sed -n '/^separator =/p' <<< ${block_config_old} 2> /dev/null)
+	element_location=$(sed -n '/^snap_location =/p' <<< ${block_config_old} 2> /dev/null)
+
+	# write new config block
+	block_config_new="version = 1.2"'\n'
+	block_config_new+=${element_server}'\n'
+	block_config_new+=${element_mode}'\n'
+	block_config_new+=${element_label}'\n'
+	block_config_new+="identifier = number"'\n'
+	block_config_new+=${element_dateformat}'\n'
+	block_config_new+=${element_separator}'\n'
+	block_config_new+="snap_flags ="'\n'
+	block_config_new+=${element_location}'\n'
+	block_config_new+=${element_credentials}'\n'
+	block_config_new+=${element_encryption}'\n'
+	block_config_new+="compression ="'\n'
+	block_config_new+=${element_user}
+
+	# delete old config block
+	sed -i "/^#config#/,/^#config#/!b;//!d" ${dir_element}/"${element_matching}"${file_extension}
+	# and write new one
+	sed -i "0,/^#config/ s;#config#;&\n${block_config_new};" ${dir_element}/"${element_matching}"${file_extension}
+
+	# with version 1.2 lxd and zfs query source instead of target.
+	if [[ "${element_mode}" == "mode = zfs" ]] || [[ "${element_mode}" == "mode = lxd" ]]; then
+		# get target block
+		block_target_old=$(awk '/^#target#$/ {flag=!flag; count+=1; next} flag && count < 2 {print}' ${dir_element}/"${element_matching}"${file_extension})
+		
+		# sed doesn't like multi line strings.
+		for target in ${block_target_old}
+		do	block_target_new+=${target}'\n'
+		done
+		block_target_new=$(echo "${block_target_new}" | rev | cut -c 3- | rev)
+		
+		# cleanup the source and target blocks
+		sed -i "/^#source#/,/^#source#/!b;//!d" ${dir_element}/"${element_matching}"${file_extension}
+		sed -i "/^#target#/,/^#target#/!b;//!d" ${dir_element}/"${element_matching}"${file_extension}
+		# write old target block into source block
+		sed -i "0,/^#source/ s;#source#;&\n${block_target_new};" ${dir_element}/"${element_matching}"${file_extension}
+		unset block_target_new
+	fi
+}
 
 function upgrade1.1 {
 	do-initial

@@ -166,19 +166,25 @@ if [[ "${config_function}" == "list" ]]; then
 	config_port=$(awk -v condition1="server" '$1 == condition1 { print $4 }' <<< "${block_config}")
 	mode=$(awk -v condition1="mode" '$1 == condition1 { print $3 }' <<< "${block_config}")
 	snap_label=$(awk -v condition1="label" '$1 == condition1 { print $3 }' <<< "${block_config}")
-	config_credentials=$(awk -v condition1="credentials" '$1 == condition1 { print $3 }' <<< "${block_config}")
-	config_certificate=$(awk -v condition1="encryption" '$1 == condition1 { print $3 }' <<< "${block_config}")
-	config_user=$(awk -v condition1="user" '$1 == condition1 { print $3 }' <<< "${block_config}")
-	snap_string_separator_1=$(awk -v condition1="separator" '$1 == condition1 { print $3 }' <<< "${block_config}")
-	snap_string_separator_2=$(awk -v condition1="separator" '$1 == condition1 { print $4 }' <<< "${block_config}")
-	config_target=$(awk -v condition1="snap_location" '$1 == condition1 { print $3 }' <<< "${block_config}")
-	config_archival=$(awk -v condition1="archival" '$1 == condition1 { print $0 }' <<< "${block_config}" | cut -d " " -f 3-)
-
 	# snap_string can be given by argument so that all snapshots follow the same scheme
 	if [[ -n "${snap_string}" ]]; then
 		snap_date=${snap_string}; else
 		snap_date=$(date +$(awk -v condition1="dateformat" '$1 == condition1 { print $3 }' <<< "${block_config}"))
 	fi
+	snap_identifier=$(awk -v condition1="identifier" '$1 == condition1 { print $3 }' <<< "${block_config}")
+	snap_string_separator_1=$(awk -v condition1="separator" '$1 == condition1 { print $3 }' <<< "${block_config}")
+	snap_string_separator_2=$(awk -v condition1="separator" '$1 == condition1 { print $4 }' <<< "${block_config}")
+	probe=$(awk -v condition1="snap_flags" '$1 == condition1 { print $3 }' <<< "${block_config}")
+	if [[ "${probe}" == "existing" ]]; then
+		snap_new_impede=set;
+	elif [[ "${probe}" == "archival" ]]; then
+		snap_pre_rollback=$(awk -v condition1="snap_flags" '$1 == condition1 { print $4 }' <<< "${block_config}" | tr ":" " ")
+	fi
+	config_target=$(awk -v condition1="snap_location" '$1 == condition1 { print $3 }' <<< "${block_config}")
+	config_credentials=$(awk -v condition1="credentials" '$1 == condition1 { print $3 }' <<< "${block_config}")
+	config_certificate=$(awk -v condition1="encryption" '$1 == condition1 { print $3 }' <<< "${block_config}")
+	config_compression=$(awk -v condition1="encryption" '$1 == condition1 { print $3, $4 }' <<< "${block_config}")
+	config_user=$(awk -v condition1="user" '$1 == condition1 { print $3 }' <<< "${block_config}")
 
 	# get snapshot table
 	supported_frequencies=$(head -n 1 <<< "${block_table}")
@@ -196,8 +202,16 @@ if [[ "${config_function}" == "list" ]]; then
 		unset snap_string_separator_2
 	fi
 
+	if [[ "${snap_identifier}" == "number" ]] || [[ ! -n "${snap_identifier}" ]]; then
+		snap_identifier=${snap_nmbr};
+	elif [[ "${snap_identifier}" == "frequency" ]]; then
+		snap_identifier=${current_frequency}
+	elif [[ "${snap_identifier}" == "empty" ]]; then
+		unset snap_identifier; else
+		echo "snap_identifier is not valid: ${snap_identifier}" && exit 1
+	fi
 	# get the names for the snapstring
-	snap_name="${snap_label}""${snap_nmbr}""${snap_string_separator_2}"
+	snap_name="${snap_label}""${snap_identifier}""${snap_string_separator_2}"
 	snap_string="${snap_name}""${snap_date}"
 
 	unset element block_config block_table supported_frequencies; else
