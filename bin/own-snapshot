@@ -414,16 +414,9 @@ do	aa=$((${aa} + 1))
 				fi
 
 			elif [[ "${mode_snapshot}" == "zfs" ]]; then
-				if [[ ! -z ${root_set[aa]} ]]; then
-					if [[ -n "${config_ssh_source_part1}" ]]; then
-						probe=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "find '${root_set[aa]}'/.zfs/snapshot/${snap_string} -maxdepth 0 2> /dev/null"); else
-						probe=$(find "${root_set[aa]}"/.zfs/snapshot/${snap_string} -maxdepth 0 2> /dev/null)
-					fi; else
-
-					if [[ -n "${config_ssh_source_part1}" ]]; then
-						probe=$(ssh -S ~/.ssh/%C ${config_server}${config_port} ${config_port} "zfs list -t snapshot | grep '${snap_set[aa]}'${snap_string_complete}"); else
-						probe=$(zfs list -t snapshot | grep "${snap_set[aa]}"${snap_string_complete})
-					fi
+				if [[ -n "${config_ssh_source_part1}" ]]; then
+					probe=$(ssh -S ~/.ssh/%C ${config_server}${config_port} "zfs get -Ho value -r name '${root_set[aa]}'" | tail -n +2 | grep "${root_set[aa]}"${snap_string_complete}); else
+					probe=$(zfs get -Ho value -r name "${root_set[aa]}" | tail -n +2 | grep "${root_set[aa]}"${snap_string_complete})
 				fi
 
 			elif [[ "${mode_snapshot}" == "lxd" ]]; then
@@ -447,7 +440,7 @@ do	aa=$((${aa} + 1))
 
 		if [[ ! "${previous}" == "exists" ]]; then
 			if [[ "${mode_create}" == "zfs" ]]; then
-				command="${config_ssh_source_part1}zfs snapshot '${snap_set[aa]}'${snap_string_complete}${config_ssh_source_part2}"
+				command="${config_ssh_source_part1}zfs snapshot '${root_set[aa]}'${snap_string_complete}${config_ssh_source_part2}"
 
 			elif [[ "${mode_create}" == "btrfs" ]]; then
 				command="${config_ssh_source_part1}btrfs subvolume snapshot -r '${root_set[aa]}' '${snap_set[aa]}'${snap_string_complete}${config_ssh_source_part2}"
@@ -490,17 +483,9 @@ do	aa=$((${aa} + 1))
 			if [[ "${config_function}" == "list" ]]; then
 				# determining the snapshots and their number
 				if [[ "${mode_snapshot}" == "zfs" ]]; then
-					if [[ ! -z ${root_set[aa]} ]]; then
-						if [[ -n "${config_ssh_target_part1}" ]]; then
-							snap_shots_strict=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "find '${root_set[aa]}'/.zfs/snapshot/${snap_name}* -maxdepth 0 -printf "%f\n" 2> /dev/null"); else
-							snap_shots_strict=$(find "${root_set[aa]}"/.zfs/snapshot/${snap_name}* -maxdepth 0 -printf "%f\n" 2> /dev/null)
-						fi
-						snap_shots_strict=$(echo "${snap_shots_strict}" | sed "s;${snap_name};${snap_set[aa]}@${snap_name};g" 2> /dev/null); else
-
-						if [[ -n "${config_ssh_target_part1}" ]]; then
-							snap_shots_strict=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "zfs list -t snapshot" | grep '${snap_set[aa]}'${snap_string_separator_1}${snap_name} | awk '{ print $1 }'); else
-							snap_shots_strict=$(zfs list -t snapshot | grep "${snap_set[aa]}"${snap_string_separator_1}${snap_name} | awk '{ print $1 }')
-						fi
+					if [[ -n "${config_ssh_target_part1}" ]]; then
+						snap_shots_strict=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "zfs get -Ho value -r name '${root_set[aa]}'" | tail -n +2 | grep ${root_set[aa]}${snap_string_separator_1}${snap_name}); else
+						snap_shots_strict=$(zfs get -Ho value -r name "${root_set[aa]}" | tail -n +2 | grep "${root_set[aa]}"${snap_string_separator_1}${snap_name})
 					fi
 
 				elif [[ "${mode_snapshot}" == "btrfs" ]] || [[ "${mode_snapshot}" == "file" ]]; then
