@@ -114,6 +114,7 @@ if [[ -n "${output}" ]]; then
 
 	elif [[ "${output}" == "commands" ]] || [[ "${output}" == "snapvars" ]]; then
 		check_commands="set"
+		add_snapshot="set"
 
 	elif [[ "${output}" == "snapshots" ]]; then
 		check_commands="set"
@@ -521,6 +522,9 @@ do	aa=$((${aa} + 1))
 					fi
 				fi
 
+				if [[ -n "${add_snapshot}" ]] && [[ ! -n "${snap_new_impede}" ]]; then
+					snap_shots_strict=${snap_shots_strict}$'\n'"${snap_set[aa]}""${snap_file[aa]}"${snap_string_complete}${snap_file_type[aa]}
+				fi
 				snap_number_strict=$(echo "${snap_shots_strict}" | awk 'END{print NR}')
 
 				if [[ "${check_snapshots}" == "set" ]]; then
