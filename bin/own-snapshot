@@ -34,7 +34,7 @@ dir_modules=${dir_root}/modules
 dir_conf=/etc/own-snapshot
 config_options_rsync="-a"
 supported_mode="btrfs zfs directory file kvm lxd mysql pgsql ldap"
-supported_element_version=1.1
+supported_element_version=1.2
 
 
 # --------------------------------- Parameter ----------------------------------
@@ -428,8 +428,8 @@ do	aa=$((${aa} + 1))
 
 			elif [[ "${mode_snapshot}" == "lxd" ]]; then
 				if [[ -n "${config_ssh_source_part1}" ]]; then
-					probe=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "lxc info '${snap_set[aa]}'" | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' | grep '${snap_set[aa]}'${snap_string_complete} 2> /dev/null); else
-					probe=$(lxc info "${snap_set[aa]}" | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' | grep '${snap_set[aa]}'${snap_string_complete} 2> /dev/null)
+					probe=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "lxc info '${root_set[aa]}'" | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' | grep '${root_set[aa]}'${snap_string_complete} 2> /dev/null); else
+					probe=$(lxc info "${root_set[aa]}" | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' | grep '${root_set[aa]}'${snap_string_complete} 2> /dev/null)
 				fi
 
 			elif [[ "${mode_snapshot}" == "kvm" ]]; then
@@ -473,7 +473,7 @@ do	aa=$((${aa} + 1))
 				fi
 
 			elif [[ "${mode_create}" == "lxd" ]]; then
-				command="${config_ssh_source_part1}lxc snapshot '${snap_set[aa]}' '${snap_set[aa]}'${snap_string_complete}${config_ssh_source_part2}"
+				command="${config_ssh_source_part1}lxc snapshot '${root_set[aa]}' '${root_set[aa]}'${snap_string_complete}${config_ssh_source_part2}"
 
 			elif [[ "${mode_create}" == "kvm" ]]; then
 				command="${config_ssh_source_part1}qm snapshot '${root_set[aa]}' ${snap_string}${config_ssh_source_part2}"
@@ -511,8 +511,8 @@ do	aa=$((${aa} + 1))
 
 				elif [[ "${mode_snapshot}" == "lxd" ]]; then
 					if [[ -n "${config_ssh_target_part1}" ]]; then
-						snap_shots_strict=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "lxc info '${snap_set[aa]}' | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' 2> /dev/null"); else
-						snap_shots_strict=$(lxc info "${snap_set[aa]}" | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' 2> /dev/null)
+						snap_shots_strict=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "lxc info '${root_set[aa]}' | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' 2> /dev/null"); else
+						snap_shots_strict=$(lxc info "${root_set[aa]}" | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' 2> /dev/null)
 					fi
 
 				elif [[ "${mode_snapshot}" == "kvm" ]]; then
