@@ -69,7 +69,7 @@ while getopts ":c:e:if:l:m:n:o:p:q:r:s:z:vh" opt; do
 			;;
 		s)	config_server=$OPTARG
 			;;
-		z)	config_certificate=$OPTARG
+		z)	config_encryption=$OPTARG
 			;;
 		v)	echo "${version}"
 			exit 0
@@ -141,7 +141,7 @@ fi
 
 if [[ "${config_function}" == "list" ]]; then
 	# check if config is set
-	if [[ "$check_config" == "set" ]]; then
+	if [[ -n "$check_config" ]]; then
 		probe=$(find ${element} 2>&1)
 		if [[ ! "${probe}" == "${element}" ]]; then
 			echo "the config does not exist" && exit 1
@@ -180,9 +180,9 @@ if [[ "${config_function}" == "list" ]]; then
 	elif [[ "${probe}" == "archival" ]]; then
 		snap_pre_rollback=$(awk -v condition1="snap_flags" '$1 == condition1 { print $4 }' <<< "${block_config}" | tr ":" " ")
 	fi
-	config_target=$(awk -v condition1="snap_location" '$1 == condition1 { print $3 }' <<< "${block_config}")
+	snap_location=$(awk -v condition1="snap_location" '$1 == condition1 { print $3 }' <<< "${block_config}")
 	config_credentials=$(awk -v condition1="credentials" '$1 == condition1 { print $3 }' <<< "${block_config}")
-	config_certificate=$(awk -v condition1="encryption" '$1 == condition1 { print $3 }' <<< "${block_config}")
+	config_encryption=$(awk -v condition1="encryption" '$1 == condition1 { print $3 }' <<< "${block_config}")
 	config_compression=$(awk -v condition1="encryption" '$1 == condition1 { print $3, $4 }' <<< "${block_config}")
 	config_user=$(awk -v condition1="user" '$1 == condition1 { print $3 }' <<< "${block_config}")
 
@@ -219,7 +219,7 @@ if [[ "${config_function}" == "list" ]]; then
 	if [[ -n "${config_server}" ]]; then
 		probe=$(echo "${config_server}" | grep "~" || true)
 		if [[ -n "${probe}" ]]; then
-			config_target=$(echo "${config_server}" | cut -d "~" -f 2)
+			snap_location=$(echo "${config_server}" | cut -d "~" -f 2)
 			config_server=$(echo "${config_server}" | cut -d "~" -f 1)
 		fi
 	fi
@@ -245,7 +245,7 @@ if [[ -n "${mode}" ]]; then
 		mode_snapshot=file
 
 	elif [[ "${mode}" == "file" ]]; then
-		if [[ -n "${config_certificate}" ]]; then
+		if [[ -n "${config_encryption}" ]]; then
 			mode_create=pipe; else
 			mode_create=rsync
 		fi
@@ -269,17 +269,17 @@ if [[ -n "${config_server}" ]]; then
 		ssh -Nf -p "${config_port}" "${config_server}" -o ControlMaster=auto -o ControlPath=~/.ssh/%C -o ControlPersist=1m
 	fi
 
-	if  [[ ! -n "${config_target}" ]] || [[ ! "${mode_snapshot}" == "file" ]]; then
-		config_target=server
+	if  [[ ! -n "${snap_location}" ]] || [[ ! "${mode_snapshot}" == "file" ]]; then
+		snap_location=server
 	fi
 
-	if [[ "${config_target}" == "server" ]]; then
+	if [[ "${snap_location}" == "server" ]]; then
 		config_ssh_source_part1="ssh -S ~/.ssh/%C ${config_server}${config_port} \""
 		config_ssh_source_part2="\""
 		config_ssh_target_part1="ssh -S ~/.ssh/%C ${config_server}${config_port} \""
 		config_ssh_target_part2="\""
 
-	elif	[[ "${config_target}" == "local" ]]; then
+	elif	[[ "${snap_location}" == "local" ]]; then
 		config_ssh_source_part1="ssh -S ~/.ssh/%C ${config_server}${config_port} \""
 		config_ssh_source_part2="\""
 
@@ -287,7 +287,7 @@ if [[ -n "${config_server}" ]]; then
 			ssh_rsync_source="-e \"ssh -S ~/.ssh/%C ${config_port}\" ${config_server}:"
 		fi
 
-	elif	[[ "${config_target}" == "remote" ]]; then
+	elif	[[ "${snap_location}" == "remote" ]]; then
 		config_ssh_target_part1="ssh -S ~/.ssh/%C ${config_server}${config_port} \""
 		config_ssh_target_part2="\""
 
@@ -295,20 +295,20 @@ if [[ -n "${config_server}" ]]; then
 			ssh_rsync_target="-e \"ssh -S ~/.ssh/%C ${config_port}\" ${config_server}:"
 		fi
 
-	elif	[[ "${config_target}" == "direct" ]]; then
+	elif	[[ "${snap_location}" == "direct" ]]; then
 		config_sql_server=${config_server}; else
 
 		echo "something is wrong with the ssh settings" && exit 1
 	fi
-	unset config_target
+	unset snap_location
 fi
 
-if [[ "${mode_create}" == "pipe" ]] && [[ -n "${config_certificate}" ]]; then
-	# if config_certificate is a ssl certificate it is always a path. this way it is compatible with the current config file
-	probe=$(echo ${config_certificate} | cut -c 1)
+if [[ "${mode_create}" == "pipe" ]] && [[ -n "${config_encryption}" ]]; then
+	# if config_encryption is a ssl certificate it is always a path. this way it is compatible with the current config file
+	probe=$(echo ${config_encryption} | cut -c 1)
 	if [[ "${probe}" == "/" ]] || [[ "${probe}" == "~" ]]; then
-		snap_encrypt=" | openssl smime -encrypt -binary -text -aes256 -outform DER ${config_certificate}"; else
-		snap_encrypt=" | gpg -r ${config_certificate} -e"
+		snap_encrypt=" | openssl smime -encrypt -binary -text -aes256 -outform DER ${config_encryption}"; else
+		snap_encrypt=" | gpg -r ${config_encryption} -e"
 	fi
 fi
 
@@ -369,7 +369,7 @@ fi
 #set back the control variable
 aa="-1"
 
-if [[ "${check_config}" == "set" ]]; then
+if [[ -n "${check_config}" ]]; then
 	if [[ ! -n "${snap_set}" ]] || [[ -z "${snap_set}" ]]; then
 		echo "Target is not set or empty" && exit 1
 	fi
@@ -391,15 +391,15 @@ if [[ "${check_config}" == "set" ]]; then
 
 	if [[ "${mode_create}" == "rsync" ]] || [[ "${mode_create}" == "pipe" ]]; then
 		echo "user:group is: ${config_user}"
-		echo "the path to the certificate is: ${config_certificate}"
-		echo "the target for the snapshot is: ${config_target}. Valid is local, remote and empty"
+		echo "the path to the certificate is: ${config_encryption}"
+		echo "the target for the snapshot is: ${snap_location}. Valid is local, remote and empty"
 	fi
 
 	if [[ "${mode_create}" == "mysql" ]]; then
 		echo "the path to the credentials is: ${config_credentials}"
 	fi
 
-	if [[ ! "${check_commands}" == "set" ]]; then
+	if [[ ! -n "${check_commands}" ]]; then
 		exit 0
 	fi
 fi
@@ -416,14 +416,14 @@ do	aa=$((${aa} + 1))
 	root_set[aa]=$(echo "${root_set[aa]}" | tr "~" " ")
 
 	if [[ ! -z "${snap_limit[aa]}" ]] && [[ ! "${snap_limit[aa]}" == "0" ]]; then
-		if [[ "${check_commands}" == "set" ]]; then
+		if [[ -n "${check_commands}" ]]; then
 			printf -- "\n--------------- ${snap_set[aa]}${snap_file[aa]}${snap_string_complete}${snap_file_type[aa]} ---------------\n"
 		fi
 
-		if [[ "${check_previous}" == "set" ]]; then
+		if [[ -n "${check_previous}" ]]; then
 			if [[ "${mode_snapshot}" == "btrfs" ]] || [[ "${mode_snapshot}" == "file" ]]; then
 				if [[ -n "${config_ssh_source_part1}" ]]; then
-					probe=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "find "${snap_set[aa]}""${snap_file[aa]}"${snap_string_complete}${snap_file_type[aa]} -maxdepth 0 2> /dev/null"); else
+					probe=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "find '${snap_set[aa]}''${snap_file[aa]}'${snap_string_complete}${snap_file_type[aa]} -maxdepth 0 2> /dev/null"); else
 					probe=$(find "${snap_set[aa]}""${snap_file[aa]}"${snap_string_complete}${snap_file_type[aa]} -maxdepth 0 2> /dev/null)
 				fi
 
@@ -435,8 +435,8 @@ do	aa=$((${aa} + 1))
 
 			elif [[ "${mode_snapshot}" == "lxd" ]]; then
 				if [[ -n "${config_ssh_source_part1}" ]]; then
-					probe=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "lxc info '${root_set[aa]}'" | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' | grep '${root_set[aa]}'${snap_string_complete} 2> /dev/null); else
-					probe=$(lxc info "${root_set[aa]}" | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' | grep '${root_set[aa]}'${snap_string_complete} 2> /dev/null)
+					probe=$(ssh -S ~/.ssh/%C ${config_server}${config_port}  "lxc info '${root_set[aa]}'" | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' | grep "${root_set[aa]}"${snap_string_complete} 2> /dev/null); else
+					probe=$(lxc info "${root_set[aa]}" | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' | grep "${root_set[aa]}"${snap_string_complete} 2> /dev/null)
 				fi
 
 			elif [[ "${mode_snapshot}" == "kvm" ]]; then
@@ -488,7 +488,7 @@ do	aa=$((${aa} + 1))
 
 			# If snapshots not created by this script should be handled, existing_only can be set
 			if [[ ! -n "${snap_new_impede}" ]]; then
-				if [[ "${check_commands}" == "set" ]]; then
+				if [[ -n "${check_commands}" ]]; then
 					echo "${command}"; else
 					eval ${command}
 				fi
@@ -526,7 +526,7 @@ do	aa=$((${aa} + 1))
 				fi
 				snap_number_strict=$(echo "${snap_shots_strict}" | awk 'END{print NR}')
 
-				if [[ "${check_snapshots}" == "set" ]]; then
+				if [[ -n "${check_snapshots}" ]]; then
 					printf "The Snapshotnumber is ${snap_number_strict}:\n${snap_shots_strict}\n"
 				fi
 
@@ -552,7 +552,7 @@ do	aa=$((${aa} + 1))
 					snap_shots_strict=$(echo "${snap_shots_strict}" | tail -n +2)
 					snap_number_strict=$((${snap_number_strict} - 1))
 
-					if [[ "${check_commands}" == "set" ]]; then
+					if [[ -n "${check_commands}" ]]; then
 						echo "${command}"; else
 						eval ${command}
 					fi
