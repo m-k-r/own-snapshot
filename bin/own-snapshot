@@ -183,7 +183,8 @@ if [[ "${config_function}" == "list" ]]; then
 	snap_location=$(awk -v condition1="snap_location" '$1 == condition1 { print $3 }' <<< "${block_config}")
 	config_credentials=$(awk -v condition1="credentials" '$1 == condition1 { print $3 }' <<< "${block_config}")
 	config_encryption=$(awk -v condition1="encryption" '$1 == condition1 { print $3 }' <<< "${block_config}")
-	config_compression=$(awk -v condition1="compression" '$1 == condition1 { print $3, $4 }' <<< "${block_config}")
+	config_compression=$(awk -v condition1="compression" '$1 == condition1 { print $3 }' <<< "${block_config}")
+	config_compression_lvl=$(awk -v condition1="compression" '$1 == condition1 { print $4 }' <<< "${block_config}")
 	config_user=$(awk -v condition1="user" '$1 == condition1 { print $3 }' <<< "${block_config}")
 
 	# get snapshot table
@@ -347,6 +348,29 @@ if [[ "${mode_snapshot}" == "file" ]]; then
 				snap_encrypt=" | gpg -r ${config_encryption} -e"
 			fi
 		fi
+
+		if [[ -n "${config_compression}" ]]; then
+			if [[ "${config_compression}" == "gzip" ]]; then
+				if [[ "${mode_create}" == "pipe" ]]; then
+					snap_compression=" | gzip"
+				fi;
+			elif [[ "${config_compression}" == "xz" ]]; then
+				if [[ "${mode_create}" == "pipe" ]]; then
+					snap_compression=" | xz"
+				fi; else
+				echo "compression is not valid: ${config_compression}. valid is gzip or xz" && exit 1
+			fi
+
+			if [[ -n "${config_compression_lvl}" ]]; then
+				# test if config_compression_lvl is a valid single digit integer
+				#if [[ "${config_compression_lvl}" =~ "^[0-9]$" ]] ; then (for some reason not working)
+				if [[ "${config_compression_lvl}" -le "9" ]] && [[ "${config_compression_lvl}" -ge "1" ]] ; then
+					snap_compression+=" -${config_compression_lvl}"; else
+					echo "the compression level is not valid: ${config_compression_lvl}. valid is 1-9" && exit 1
+				fi
+			fi
+			unset config_compression config_compression_lvl
+		fi
 	fi
 
 	# config_user has to be in the format user_id:group_id
@@ -357,16 +381,12 @@ if [[ "${mode_snapshot}" == "file" ]]; then
 		fi
 
 		aa="-1"
-
 		for root_set_element in "${root_set[@]}"
 		do	aa=$((${aa} + 1))
 			change_user[aa]=" && chown -R ${config_user} '${snap_set[aa]}''${snap_file[aa]}'${snap_string_complete}${snap_file_type[aa]}"
 		done
 	fi
 fi
-
-#set back the control variable
-aa="-1"
 
 if [[ -n "${check_config}" ]]; then
 	echo "under reconstruction"
@@ -376,6 +396,8 @@ if [[ -n "${check_config}" ]]; then
 	fi
 fi
 
+#set back the control variable
+aa="-1"
 # snap_number has n-elements but the script starts with element 0. So the script has to count to n-1
 if [ -n "${root_set}" ] && [ ! -z "${root_set}" ]
 	then	root_set_number=$((${#root_set[@]} -1))
@@ -433,14 +455,15 @@ do	aa=$((${aa} + 1))
 
 			elif [[ "${mode_create}" == "pipe" ]]; then
 				if [[ "${mode}" == "file" ]]; then
-					command_part1="cat '${root_set[aa]}'${snap_encrypt}"
+					command_part1="cat '${root_set[aa]}'"
 				elif [[ "${mode}" == "mysql" ]]; then
-					command_part1="mysqldump --defaults-extra-file=${config_credentials} --routines --triggers --single-transaction -h ${config_sql_server} '${snap_file[aa]}'${snap_encrypt}"
+					command_part1="mysqldump --defaults-extra-file=${config_credentials} --routines --triggers --single-transaction -h ${config_sql_server} '${snap_file[aa]}'"
 				elif [[ "${mode}" == "pgsql" ]]; then
-					command_part1="pg_dump -h ${config_sql_server} -U ${config_credentials} -C -F c '${snap_file[aa]}'${snap_encrypt}"
+					command_part1="pg_dump -h ${config_sql_server} -U ${config_credentials} -C -F c '${snap_file[aa]}'"
 				elif [[ "${mode}" == "ldap" ]]; then
-					command_part1="slapcat -n '${root_set[aa]}'${snap_encrypt}"
+					command_part1="slapcat -n '${root_set[aa]}'"
 				fi
+				command_part1+="${snap_compression}""${snap_encrypt}"
 
 				command_part2="cat > '${snap_set[aa]}''${snap_file[aa]}'${snap_string_complete}${snap_file_type[aa]}${change_user[aa]}"
 				command="${config_ssh_source_part1}${command_part1}${config_ssh_source_part2} | ${config_ssh_target_part1}${command_part2}${config_ssh_target_part2}"
