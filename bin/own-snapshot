@@ -183,7 +183,7 @@ if [[ "${config_function}" == "list" ]]; then
 	snap_location=$(awk -v condition1="snap_location" '$1 == condition1 { print $3 }' <<< "${block_config}")
 	config_credentials=$(awk -v condition1="credentials" '$1 == condition1 { print $3 }' <<< "${block_config}")
 	config_encryption=$(awk -v condition1="encryption" '$1 == condition1 { print $3 }' <<< "${block_config}")
-	config_compression=$(awk -v condition1="encryption" '$1 == condition1 { print $3, $4 }' <<< "${block_config}")
+	config_compression=$(awk -v condition1="compression" '$1 == condition1 { print $3, $4 }' <<< "${block_config}")
 	config_user=$(awk -v condition1="user" '$1 == condition1 { print $3 }' <<< "${block_config}")
 
 	# get snapshot table
@@ -378,11 +378,11 @@ if [[ -n "${check_config}" ]]; then
 fi
 
 # snap_number has n-elements but the script starts with element 0. So the script has to count to n-1
-if [ -n "${snap_set}" ] && [ ! -z "${snap_set}" ]
-	then	snap_set_number=$((${#snap_set[@]} -1))
+if [ -n "${root_set}" ] && [ ! -z "${root_set}" ]
+	then	root_set_number=$((${#root_set[@]} -1))
 fi
 
-while [[ "${snap_set_number}" -gt "${aa}" ]]
+while [[ "${root_set_number}" -gt "${aa}" ]]
 do	aa=$((${aa} + 1))
 	# if snap_set and root_set contained spaces they had been translated to "~" and have to be retranslated to " "
 	snap_set[aa]=$(echo "${snap_set[aa]}" | tr "~" " ")
@@ -390,7 +390,7 @@ do	aa=$((${aa} + 1))
 
 	if [[ ! -z "${snap_limit[aa]}" ]] && [[ ! "${snap_limit[aa]}" == "0" ]]; then
 		if [[ -n "${check_commands}" ]]; then
-			printf -- "\n--------------- ${snap_set[aa]}${snap_file[aa]}${snap_string_complete}${snap_file_type[aa]} ---------------\n"
+			printf -- "\n--------------- ${root_set[aa]}${snap_file[aa]}${snap_string_complete}${snap_file_type[aa]} ---------------\n"
 		fi
 
 		if [[ -n "${check_previous}" ]]; then
