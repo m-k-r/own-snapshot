@@ -232,8 +232,11 @@ if [[ -n "${mode}" ]]; then
 		mode_snapshot=${mode}
 
 	elif [[ "${mode}" == "directory" ]]; then
+		# internally mode_create is not different from file execpt an additional / so that rsync doesn't copy the directory inside the target but change the name to it
 		mode_create=rsync
 		mode_snapshot=file
+		mode=file
+		config_options_rsync2="/"
 
 	elif [[ "${mode}" == "mysql" ]] || [[ "${mode}" == "pgsql" ]]; then
 		config_sql_server=localhost
@@ -256,6 +259,15 @@ if [[ -n "${mode}" ]]; then
 	fi; else
 	echo "no mode is set" && exit 1
 fi
+
+snap_string_offset=$((${#snap_string}))
+if [[ "${mode_create}" == "zfs" ]] || [[ "${mode_create}" == "kvm" ]]; then
+	snap_string_separator_1="@"
+elif [[ ! -n "${snap_string_separator_1}" ]]; then
+	snap_string_separator_1="_"
+fi
+snap_string_complete=${snap_string_separator_1}${snap_string}
+#snap_name=${snap_string_separator_1}${snap_name}
 
 if [[ -n "${config_server}" ]]; then
 	if [[ -n "${config_port}" ]]; then
@@ -303,67 +315,54 @@ if [[ -n "${config_server}" ]]; then
 	unset snap_location
 fi
 
-if [[ "${mode_create}" == "pipe" ]] && [[ -n "${config_encryption}" ]]; then
-	# if config_encryption is a ssl certificate it is always a path. this way it is compatible with the current config file
-	probe=$(echo ${config_encryption} | cut -c 1)
-	if [[ "${probe}" == "/" ]] || [[ "${probe}" == "~" ]]; then
-		snap_encrypt=" | openssl smime -encrypt -binary -text -aes256 -outform DER ${config_encryption}"; else
-		snap_encrypt=" | gpg -r ${config_encryption} -e"
-	fi
-fi
+if [[ "${mode_snapshot}" == "file" ]]; then
+	# exclude mode=directory
+	if [[ ! -n "${config_options_rsync2}" ]]; then
+		#set back the control variable
+		aa="-1"
+		# files may have dot-sepparated file-types. It is convenient if this stays at the end.
+		for root_set_element in "${root_set[@]}"
+		do	aa=$((${aa} + 1))
 
-if [[ "${mode_create}" == "pipe" ]] || [[ "${mode_create}" == "rsync" ]]; then
-	#set back the control variable
-	aa="-1"
+			probe=$(echo ${snap_set[aa]} | rev | cut -c 1)
+			if [[ "${probe}" == "/" ]]; then
+				snap_file[aa]=$(echo "${root_set_element}" | rev | cut -d "/" -f 1 | rev | tr "~" " ")
+				snap_set[aa]=$(echo "${snap_set[aa]}" | tr "~" " ") ; else
+				snap_file[aa]=$(echo "${snap_set[aa]}" | rev | cut -d "/" -f 1 | rev | tr "~" " ")
+				snap_set[aa]=$(echo "${snap_set[aa]}" | rev | cut -d "/" -f 2- | rev | tr "~" " ")/
+			fi
 
-	# files may have dot-sepparated file-types. It is convenient if this stays at the end.
-	for root_set_element in "${root_set[@]}"
-	do	aa=$((${aa} + 1))
+			probe=$(echo "${snap_file[aa]}" | grep "\.")
+			if [[ -n "${probe}" ]]; then
+				snap_file_type[aa]=.$(echo "${snap_file[aa]}" | cut -d "." -f 2-)
+				snap_file[aa]=$(echo "${snap_file[aa]}" | cut -d "." -f 1)
+			fi
+		done
 
-		probe=$(echo ${snap_set[aa]} | rev | cut -c 1)
-		if [[ "${probe}" == "/" ]]; then
-			snap_file[aa]=$(echo "${root_set_element}" | rev | cut -d "/" -f 1 | rev | tr "~" " ")
-			snap_set[aa]=$(echo "${snap_set[aa]}" | tr "~" " ") ; else
-			snap_file[aa]=$(echo "${snap_set[aa]}" | rev | cut -d "/" -f 1 | rev | tr "~" " ")
-			snap_set[aa]=$(echo "${snap_set[aa]}" | rev | cut -d "/" -f 2- | rev | tr "~" " ")/
+		if [[ "${mode_create}" == "pipe" ]] && [[ -n "${config_encryption}" ]]; then
+			# if config_encryption is a ssl certificate it is always a path. this way it is compatible with the current config file
+			probe=$(echo ${config_encryption} | cut -c 1)
+			if [[ "${probe}" == "/" ]] || [[ "${probe}" == "~" ]]; then
+				snap_encrypt=" | openssl smime -encrypt -binary -text -aes256 -outform DER ${config_encryption}"; else
+				snap_encrypt=" | gpg -r ${config_encryption} -e"
+			fi
 		fi
-
-		probe=$(echo "${snap_file[aa]}" | grep "\.")
-		if [[ -n "${probe}" ]]; then
-			snap_file_type[aa]=.$(echo "${snap_file[aa]}" | cut -d "." -f 2-)
-			snap_file[aa]=$(echo "${snap_file[aa]}" | cut -d "." -f 1)
-		fi
-	done
-fi
-
-snap_string_offset=$((${#snap_string}))
-if [[ "${mode_create}" == "zfs" ]] || [[ "${mode_create}" == "kvm" ]]; then
-	snap_string_separator_1="@"
-elif [[ ! -n "${snap_string_separator_1}" ]]; then
-	snap_string_separator_1="_"
-fi
-snap_string_complete=${snap_string_separator_1}${snap_string}
-#snap_name=${snap_string_separator_1}${snap_name}
-
-# config_user has to be in the format user_id:group_id
-if [[ -n "${config_user}" ]]; then
-	probe=$(echo ${config_user} | grep ":" || true)
-	if [[ ! -n "${probe}" ]]; then
-		config_user="${config_user}:${config_user}"
 	fi
 
-	aa="-1"
+	# config_user has to be in the format user_id:group_id
+	if [[ -n "${config_user}" ]]; then
+		probe=$(echo ${config_user} | grep ":" || true)
+		if [[ ! -n "${probe}" ]]; then
+			config_user="${config_user}:${config_user}"
+		fi
 
-	for root_set_element in "${root_set[@]}"
-	do	aa=$((${aa} + 1))
-		change_user[aa]=" && chown -R ${config_user} '${snap_set[aa]}''${snap_file[aa]}'${snap_string_complete}${snap_file_type[aa]}"
-	done
-fi
+		aa="-1"
 
-# internally mode_create is not different from file execpt an additional / so that rsync doesn't copy the directory inside the target but change the name to it
-if [[ "${mode}" == "directory" ]]; then
-	config_options_rsync2="/"
-	mode=file
+		for root_set_element in "${root_set[@]}"
+		do	aa=$((${aa} + 1))
+			change_user[aa]=" && chown -R ${config_user} '${snap_set[aa]}''${snap_file[aa]}'${snap_string_complete}${snap_file_type[aa]}"
+		done
+	fi
 fi
 
 #set back the control variable
