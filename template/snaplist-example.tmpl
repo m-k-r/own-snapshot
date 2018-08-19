@@ -6,7 +6,7 @@ label = auto-
 identifier = empty/number/frequency
 dateformat = %Y%m%d-%H%M%S
 separator = _ _
-snap_flags = rollback hourly:daily:weekly(zfs-only)/existing
+snap_flags = rollback hourly:daily:weekly(zfs-only)/existing/both:file:container(tar-compression)
 snap_location = server(default)/local(file/directory-only)/remote(file/directory-only)/direct(sql-only)
 credentials = ~/.mysqldump.cnf
 encryption = /etc/ssl/mycert.pem
@@ -18,14 +18,17 @@ user = testuser:testgroup
 hourly	daily	weekly	monthly	yearly
 0	2	0	0	0
 0	2	0	0	0
+0	2	0	0	0
 #table#
 
 #source#
 /
 /home
+tar
 #source#
 
 #target#
 /mnt/Pools/root-snapshots/root
 /mnt/Pools/root-snapshots/home
+/mnt/Pools/root-snapshots/test.tar
 #target#
