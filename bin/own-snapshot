@@ -33,7 +33,7 @@ dir_root=/usr/local/own-snapshot
 dir_modules=${dir_root}/modules
 dir_conf=/etc/own-snapshot
 config_options_rsync="-a"
-supported_mode="btrfs zfs directory file kvm lxd mysql pgsql ldap"
+supported_mode="btrfs zfs file kvm lxd mysql pgsql ldap"
 supported_element_version=1.2
 
 
@@ -149,66 +149,85 @@ function set-file() {
 		fi
 	fi
 
-	# exclude mode=directory
-	if [[ ! -n "${config_options_rsync2}" ]]; then
-		if [[ -n "${config_encryption}" ]]; then
-			# if config_encryption is a ssl certificate it is always a path. this way it is compatible with the current config file
-			probe=$(echo ${config_encryption} | cut -c 1)
-			if [[ "${probe}" == "/" ]] || [[ "${probe}" == "~" ]]; then
-				# if encryption via certificate
-				if [[ "${mode_create}" == "pipe" ]]; then
-					snap_encrypt=" | openssl smime -encrypt -binary -text -aes256 -outform DER ${config_encryption}";
-				elif [[ "${mode_create}" == "rsync" ]]; then
-					snap_encrypt=" && openssl smime -encrypt -binary -text -aes256 -outform DER -in INFILE -out OUTFILE ${config_encryption} && rm -rf "
-				fi
-				snap_encrypt_extension=".enc"; else
-				# if encryption via gpg
-				if [[ "${mode_create}" == "pipe" ]]; then
-					snap_encrypt=" | gpg -r ${config_encryption} -e";
-				elif [[ "${mode_create}" == "rsync" ]]; then
-					snap_encrypt=" && gpg -r ${config_encryption} -e INFILE && rm -rf "
-				fi
-				snap_encrypt_extension=".gpg"
+	if [[ -n "${config_encryption}" ]]; then
+		# if config_encryption is a ssl certificate it is always a path. this way it is compatible with the current config file
+		probe=$(echo ${config_encryption} | cut -c 1)
+		if [[ "${probe}" == "/" ]] || [[ "${probe}" == "~" ]]; then
+			# if encryption via certificate
+			if [[ "${mode_create}" == "pipe" ]]; then
+				snap_encrypt=" | openssl smime -encrypt -binary -text -aes256 -outform DER ${config_encryption}";
+			elif [[ "${mode_create}" == "rsync" ]]; then
+				snap_encrypt=" && openssl smime -encrypt -binary -text -aes256 -outform DER -in INFILE -out OUTFILE ${config_encryption} && rm -rf "
 			fi
-			unset config_encryption
+			snap_encrypt_extension=".enc"; else
+			# if encryption via gpg
+			if [[ "${mode_create}" == "pipe" ]]; then
+				snap_encrypt=" | gpg -r ${config_encryption} -e";
+			elif [[ "${mode_create}" == "rsync" ]]; then
+				snap_encrypt=" && gpg -r ${config_encryption} -e INFILE && rm -rf "
+			fi
+			snap_encrypt_extension=".gpg"
+		fi
+		unset config_encryption
+	fi
+
+	if [[ -n "${config_compression}" ]]; then
+		if [[ "${config_compression}" == "gzip" ]]; then
+			if [[ "${mode_create}" == "pipe" ]]; then
+				snap_compress=" | gzip";
+			elif [[ "${mode_create}" == "rsync" ]]; then
+				snap_compress=" && gzip"
+			fi
+			snap_compress_extension=".gz";
+		elif [[ "${config_compression}" == "xz" ]]; then
+			if [[ "${mode_create}" == "pipe" ]]; then
+				snap_compress=" | xz";
+			elif [[ "${mode_create}" == "rsync" ]]; then
+				snap_compress=" && xz"
+			fi
+			snap_compress_extension=".xz"; else
+			echo "compression is not valid: ${config_compression}. valid is gzip or xz" && exit 1
 		fi
 
-		if [[ -n "${config_compression}" ]]; then
-			if [[ "${config_compression}" == "gzip" ]]; then
-				if [[ "${mode_create}" == "pipe" ]]; then
-					snap_compress=" | gzip";
-				elif [[ "${mode_create}" == "rsync" ]]; then
-					snap_compress=" && gzip"
-				fi
-				snap_compress_extension=".gz";
-			elif [[ "${config_compression}" == "xz" ]]; then
-				if [[ "${mode_create}" == "pipe" ]]; then
-					snap_compress=" | xz";
-				elif [[ "${mode_create}" == "rsync" ]]; then
-					snap_compress=" && xz"
-				fi
-				snap_compress_extension=".xz"; else
-				echo "compression is not valid: ${config_compression}. valid is gzip or xz" && exit 1
+		if [[ -n "${config_compression_lvl}" ]]; then
+			# test if config_compression_lvl is a valid single digit integer
+			#if [[ "${config_compression_lvl}" =~ "^[0-9]$" ]] ; then (for some reason not working)
+			if [[ "${config_compression_lvl}" -le "9" ]] && [[ "${config_compression_lvl}" -ge "1" ]] ; then
+				snap_compress+=" -${config_compression_lvl}"; else
+				echo "the compression level is not valid: ${config_compression_lvl}. valid is 1-9" && exit 1
 			fi
-
-			if [[ -n "${config_compression_lvl}" ]]; then
-				# test if config_compression_lvl is a valid single digit integer
-				#if [[ "${config_compression_lvl}" =~ "^[0-9]$" ]] ; then (for some reason not working)
-				if [[ "${config_compression_lvl}" -le "9" ]] && [[ "${config_compression_lvl}" -ge "1" ]] ; then
-					snap_compress+=" -${config_compression_lvl}"; else
-					echo "the compression level is not valid: ${config_compression_lvl}. valid is 1-9" && exit 1
-				fi
-			fi
-			unset config_compression config_compression_lvl
 		fi
+		unset config_compression config_compression_lvl
 	fi
 }
 
-function set-file-extension() {
+function check-file() {
 	if [[ "${root_set[aa]}" == "tar" ]]; then
+		if [[ -n "${config_ssh_target_part1}" ]]; then
+			probe=$(ssh -S ~/.ssh/%C ${config_server} "find ${snap_set[aa]}${local_snap_file}${snap_file_type} -maxdepth 0 2> /dev/null"); else
+			probe=$(find ${snap_set[aa]}${local_snap_file}${snap_file_type} -maxdepth 0 2> /dev/null)
+		fi
+
+		if [[ -n "${probe}" ]]; then
+			container_parameter="r"
+			unset add_snapshot; else
+			container_parameter="c"
+		fi
 		mode=tar
-		set-file
+		set-file; else
+		if [[ -n "${config_ssh_target_part1}" ]]; then
+			probe=$(ssh -S ~/.ssh/%C ${config_server} "find ${root_set[aa]} -maxdepth 0 -type d 2> /dev/null"); else
+			probe=$(find ${root_set[aa]} -maxdepth 0 -type d 2> /dev/null)
+		fi
+
+		if [[ -n "${probe}" ]]; then
+			config_options_rsync2="/"
+			if [[ "${mode_create}" == "pipe" ]]; then
+				echo "${root[aa]} is a directory and mode_create is pipe. this does not work" && exit 1
+			fi
+		fi
 	fi
+
 	# if target doesn't end with a slash, the part behind the slash overrides the filename from source
 	probe=$(echo ${snap_set[aa]} | rev | cut -c 1)
 	if [[ "${probe}" == "/" ]]; then
@@ -282,7 +301,7 @@ function snap-all() {
 }
 
 function snap-file() {
-	local local_snap_file local_additional_tasks local_snap_encrypt local_container_parameter
+	local local_snap_file local_additional_tasks local_snap_encrypt
 	local_snap_file="${1}"
 	# add compression and encryption for rsync created files
 	if [[ "${mode_create}" == "rsync" ]]; then
@@ -315,13 +334,8 @@ function snap-file() {
 
 	elif [[ "${mode_create}" == "rsync" ]]; then
 		if [[ "${mode}" == "tar" ]]; then
-			if [[ -f "${snap_set[aa]}${local_snap_file}${snap_file_type}" ]]; then
-				local_container_parameter="r"; else
-				local_container_parameter="c"
-			fi
-
 			if [[ -n "${container_source}" ]]; then
-				command="${config_ssh_target_part1}tar --remove-files -${local_container_parameter}C ${snap_set[aa]}${container_source} -f ${snap_set[aa]}${local_snap_file}${snap_file_type_static}${snap_container_extension}${local_additional_tasks}${config_ssh_target_part2}"
+				command="${config_ssh_target_part1}tar --remove-files -${container_parameter}C ${snap_set[aa]}${container_source} -f ${snap_set[aa]}${local_snap_file}${snap_file_type_static}${snap_container_extension}${local_additional_tasks}${config_ssh_target_part2}"
 			fi; else
 
 			if [[ -n "${ssh_rsync_source}" ]] || [[ -n "${ssh_rsync_target}" ]]; then
@@ -459,7 +473,7 @@ if [[ "${config_function}" == "list" ]]; then
 	snap_string="${snap_name}""${snap_date}"
 
 	# if the last field in root_set is tar, then the previous fields will stored in a tar-file
-	container_create=$(echo "${root_set[-1]}" | grep "tar")
+	container_create=$(echo "${root_set[-1]}" | grep "tar" 2> /dev/null)
 	unset element block_config block_table supported_frequencies; else
 
 	if [[ -n "${config_server}" ]]; then
@@ -476,13 +490,6 @@ if [[ -n "${mode}" ]]; then
 	if [[ "${mode}" == "btrfs" ]] || [[ "${mode}" == "kvm" ]] || [[ "${mode}" == "lxd" ]] || [[ "${mode}" == "zfs" ]]; then
 		mode_create=${mode}
 		mode_snapshot=${mode}
-
-	elif [[ "${mode}" == "directory" ]]; then
-		# internally mode_create is not different from file execpt an additional / so that rsync doesn't copy the directory inside the target but change the name
-		mode_create=rsync
-		mode_snapshot=file
-		mode=file
-		config_options_rsync2="/"
 
 	elif [[ "${mode}" == "mysql" ]] || [[ "${mode}" == "pgsql" ]]; then
 		config_sql_server=localhost
@@ -622,7 +629,7 @@ do	aa=$((${aa} + 1))
 	if [[ "${mode_snapshot}"  == "btrfs" ]]; then
 		get-snapshots "${mode_snapshot}" "${snap_set[aa]}${snap_string_separator_1}" "${snap_name}" "${snap_date}" "${config_server}";
 	elif [[ "${mode_snapshot}" == "file" ]]; then
-		set-file-extension
+		check-file
 		get-snapshots "${mode_snapshot}" "${snap_set[aa]}${snap_file}${snap_string_separator_1}" "${snap_name}" "${snap_date}" "${config_server}"; else
 		get-snapshots "${mode_snapshot}" "${root_set[aa]}" "${snap_name}" "${snap_date}" "${config_server}"
 	fi
@@ -650,5 +657,5 @@ do	aa=$((${aa} + 1))
 		fi
 		do-snapdel "${snap_shots_strict}" "${mode_create}" "${snap_number_strict}" "${snap_limit_current}" "${config_ssh_target_part1}" "${config_ssh_target_part2}"
 	fi
-	unset snap_file snap_file_type snap_file_type_static
+	unset snap_file snap_file_type snap_file_type_static config_options_rsync2
 done
