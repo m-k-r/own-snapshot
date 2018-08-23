@@ -117,10 +117,9 @@ function set-file() {
 		mode_create=rsync
 		config_compression=${container_compression}
 		config_encryption=${container_encryption}
-		config_user=${container_user}
-		snap_string_complete=${container_snap_string_complete}
+		snap_string=${container_snap_string}
 		snap_container_extension=".tar"
-		unset container_create snap_compress snap_compress_extension snap_encrypt snap_encrypt_extension container_user container_snap_string_complete;
+		unset container_create snap_compress snap_compress_extension snap_encrypt snap_encrypt_extension container_snap_string;
 
 	# config_user has to be in the format user_id:group_id
 	elif [[ -n "${config_user}" ]]; then
@@ -139,9 +138,8 @@ function set-file() {
 		fi
 		container_compression=${config_compression}
 		container_encryption=${config_encryption}
-		container_snap_string_complete=${snap_string_complete}
-		container_user=${config_user}
-		unset snap_string_complete config_user
+		container_snap_string=${snap_string}
+		unset snap_string
 		if [[ "${snap_flags}" == "container" ]]; then
 			unset config_compression config_encryption;
 		elif [[ "${snap_flags}" == "file" ]]; then
@@ -202,21 +200,9 @@ function set-file() {
 }
 
 function check-file() {
-	if [[ "${root_set[aa]}" == "tar" ]]; then
-		if [[ -n "${config_ssh_target_part1}" ]]; then
-			probe=$(ssh -S ~/.ssh/%C ${config_server} "find ${snap_set[aa]}${local_snap_file}${snap_file_type} -maxdepth 0 2> /dev/null"); else
-			probe=$(find ${snap_set[aa]}${local_snap_file}${snap_file_type} -maxdepth 0 2> /dev/null)
-		fi
-
-		if [[ -n "${probe}" ]]; then
-			container_parameter="r"
-			unset add_snapshot; else
-			container_parameter="c"
-		fi
-		mode=tar
-		set-file; else
-		if [[ -n "${config_ssh_target_part1}" ]]; then
-			probe=$(ssh -S ~/.ssh/%C ${config_server} "find ${root_set[aa]} -maxdepth 0 -type d 2> /dev/null"); else
+	if [[ "${mode}" == "file" ]] && [[ ! "${root_set[aa]}" == "tar" ]]; then
+		if [[ -n "${ssh_source_p1}" ]]; then
+			probe=$(ssh ${ssh_server} "find ${root_set[aa]} -maxdepth 0 -type d 2> /dev/null"); else
 			probe=$(find ${root_set[aa]} -maxdepth 0 -type d 2> /dev/null)
 		fi
 
@@ -231,30 +217,54 @@ function check-file() {
 	# if target doesn't end with a slash, the part behind the slash overrides the filename from source
 	probe=$(echo ${snap_set[aa]} | rev | cut -c 1)
 	if [[ "${probe}" == "/" ]]; then
-		snap_file=$(echo "${root_set[aa]}" | rev | cut -d "/" -f 1 | rev); else
-		snap_file=$(echo "${snap_set[aa]}" | rev | cut -d "/" -f 1 | rev)
+		local_snap_file=$(echo "${root_set[aa]}" | rev | cut -d "/" -f 1 | rev); else
+		local_snap_file=$(echo "${snap_set[aa]}" | rev | cut -d "/" -f 1 | rev)
 		snap_set[aa]=$(echo "${snap_set[aa]}" | rev | cut -d "/" -f 2- | rev)/
 	fi
 	# if the filename contains a dot, everything behind the first dot is considered an extension
-	probe=$(echo "${snap_file}" | grep "\.")
+	probe=$(echo "${local_snap_file}" | grep "\.")
 	if [[ -n "${probe}" ]]; then
-		snap_file_type_static=.$(echo "${snap_file}" | cut -d "." -f 2-)
-		snap_file=$(echo "${snap_file}" | cut -d "." -f 1)
+		snap_file_type_static=.$(echo "${local_snap_file}" | cut -d "." -f 2-)
+		local_snap_file=$(echo "${local_snap_file}" | cut -d "." -f 1)
+
 	fi
-	snap_file_type=${snap_file_type_static}${snap_container_extension}${snap_compress_extension}${snap_encrypt_extension}
+
+	if [[ "${root_set[aa]}" == "tar" ]]; then
+		mode=tar
+		set-file
+		container_dir=${snap_set[aa]}
+		snap_set[aa]+=${local_snap_file}
+		snap_file_type=${snap_file_type_static}${snap_container_extension}${snap_compress_extension}${snap_encrypt_extension}
+		if [[ -n "${ssh_target_p1}" ]]; then
+			probe=$(ssh ${ssh_server} "find ${snap_set[aa]}${snap_string}${snap_file_type} -maxdepth 0 2> /dev/null"); else
+			probe=$(find ${snap_set[aa]}${snap_string}${snap_file_type} -maxdepth 0 2> /dev/null)
+		fi
+
+		if [[ -n "${probe}" ]]; then
+			container_parameter="r"
+			unset add_snapshot; else
+			container_parameter="c"
+		fi; else
+		snap_set[aa]+=${local_snap_file}
+		snap_file_type=${snap_file_type_static}${snap_container_extension}${snap_compress_extension}${snap_encrypt_extension}
+		if [[ -n "${container_create}" ]]; then
+			container_source+=" ${local_snap_file}${snap_file_type}"
+		fi
+	fi
 }
 
 function get-snapshots() {
-	local local_server local_root local_identifier local_datestring snap_shots
+	local local_mode local_server local_root local_identifier local_datestring snap_shots
+	local_mode="${1}"
 	local_root="${2}"
 	local_identifier="${3}"
 	local_datestring="${4}"
 	local_server="${5}"
 
 	# determining the snapshots and their number
-	if [[ "${1}" == "zfs" ]]; then
-		if [[ -n "${config_ssh_target_part1}" ]]; then
-			snap_shots=$(ssh -S ~/.ssh/%C ${local_server} "zfs get -Ho value -r name '${local_root}'" | tail -n +2); else
+	if [[ "${local_mode}" == "zfs" ]]; then
+		if [[ -n "${ssh_target_p1}" ]]; then
+			snap_shots=$(ssh ${local_server} "zfs get -Ho value -r name ${local_root}" | tail -n +2); else
 			snap_shots=$(zfs get -Ho value -r name "${local_root}" | tail -n +2)
 		fi
 		if [[ "${snap_pre_rollback}" == "set" ]]; then
@@ -262,22 +272,22 @@ function get-snapshots() {
 		fi
 		snap_shots_strict=$(echo "${snap_shots}" | grep ${local_identifier})
 
-	elif [[ "${1}" == "btrfs" ]] || [[ "${1}" == "file" ]]; then
-		if [[ -n "${config_ssh_target_part1}" ]]; then
-			snap_shots_strict=$(ssh -S ~/.ssh/%C ${local_server} "find '${local_root}'${local_identifier}* -maxdepth 0 2> /dev/null"); else
+	elif [[ "${local_mode}" == "btrfs" ]] || [[ "${1}" == "file" ]]; then
+		if [[ -n "${ssh_target_p1}" ]]; then
+			snap_shots_strict=$(ssh ${local_server} "find ${local_root}${local_identifier}* -maxdepth 0 2> /dev/null"); else
 			snap_shots_strict=$(find "${local_root}"${local_identifier}* -maxdepth 0 2> /dev/null)
 		fi
 
-	elif [[ "${1}" == "lxd" ]]; then
-		if [[ -n "${config_ssh_target_part1}" ]]; then
-			snap_shots_strict=$(ssh -S ~/.ssh/%C ${local_server} "lxc info '${local_root}' | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' 2> /dev/null"); else
+	elif [[ "${local_mode}" == "lxd" ]]; then
+		if [[ -n "${ssh_target_p1}" ]]; then
+			snap_shots_strict=$(ssh ${local_server} "lxc info ${local_root} | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' 2> /dev/null"); else
 			snap_shots_strict=$(lxc info "${local_root}" | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' 2> /dev/null)
 		fi
 		snap_shots_strict=$(echo "${snap_shots_strict}" | sed "s;^;${local_root}/;" 2> /dev/null)
 
-	elif [[ "${1}" == "kvm" ]]; then
-		if [[ -n "${config_ssh_target_part1}" ]]; then
-			snap_shots_strict=$(ssh -S ~/.ssh/%C ${local_server} "qm listsnapshot '${local_root}' | awk '{print $1}' | grep ${local_identifier} 2> /dev/null"); else
+	elif [[ "${local_mode}" == "kvm" ]]; then
+		if [[ -n "${ssh_target_p1}" ]]; then
+			snap_shots_strict=$(ssh ${local_server} "qm listsnapshot ${local_root} | awk '{print $1}' | grep ${local_identifier} 2> /dev/null"); else
 			snap_shots_strict=$(qm listsnapshot "${local_root}" | awk '{print $1}' | grep ${local_identifier} 2> /dev/null)
 		fi
 		snap_shots_strict=$(echo "${snap_shots_strict}" | sed "s;^;${local_root}:;" 2> /dev/null)
@@ -286,67 +296,68 @@ function get-snapshots() {
 }
 
 function snap-all() {
-	if [[ "${mode_create}" == "zfs" ]]; then
-		command="${config_ssh_source_part1}zfs snapshot '${root_set[aa]}'${snap_string_complete}${config_ssh_source_part2}"
+	local local_mode local_root local_target local_snap_string
+	local_mode="${1}"
+	local_root="${2}"
+	local_snap_string="${3}"
+	local_target="${4}"
+	if [[ "${local_mode}" == "zfs" ]]; then
+		command="${ssh_source_p1}zfs snapshot ${local_root}${local_snap_string}${ssh_source_p2}"
 
-	elif [[ "${mode_create}" == "btrfs" ]]; then
-		command="${config_ssh_source_part1}btrfs subvolume snapshot -r '${root_set[aa]}' '${snap_set[aa]}'${snap_string_complete}${config_ssh_source_part2}"
+	elif [[ "${local_mode}" == "btrfs" ]]; then
+		command="${ssh_source_p1}btrfs subvolume snapshot -r ${local_root} ${local_target}${local_snap_string}${ssh_source_p2}"
 
-	elif [[ "${mode_create}" == "lxd" ]]; then
-		command="${config_ssh_source_part1}lxc snapshot '${root_set[aa]}' '${root_set[aa]}'${snap_string_complete}${config_ssh_source_part2}"
+	elif [[ "${local_mode}" == "lxd" ]]; then
+		command="${ssh_source_p1}lxc snapshot ${local_root} ${local_root}${local_snap_string}${ssh_source_p2}"
 
-	elif [[ "${mode_create}" == "kvm" ]]; then
-		command="${config_ssh_source_part1}qm snapshot '${root_set[aa]}' ${snap_string}${config_ssh_source_part2}"
+	elif [[ "${local_mode}" == "kvm" ]]; then
+		command="${ssh_source_p1}qm snapshot ${local_root} ${local_snap_string}${ssh_source_p2}"
 	fi
 }
 
 function snap-file() {
-	local local_snap_file local_additional_tasks local_snap_encrypt
-	local_snap_file="${1}"
+	local local_additional_tasks local_snap_encrypt
 	# add compression and encryption for rsync created files
 	if [[ "${mode_create}" == "rsync" ]]; then
 		if [[ -n "${snap_compress}" ]]; then
-			local_additional_tasks="${snap_compress} '${snap_set[aa]}${local_snap_file}'${snap_file_type_static}${snap_container_extension}"
+			local_additional_tasks="${snap_compress} ${snap_set[aa]}${snap_string}${snap_file_type_static}${snap_container_extension}"
 		fi
 
 		if [[ -n "${snap_encrypt}" ]]; then
-			local_snap_encrypt=$(echo "${snap_encrypt}" | sed "s;INFILE;'${snap_set[aa]}${local_snap_file}'${snap_file_type_static}${snap_compress_extension};g" | sed "s;OUTFILE;'${snap_set[aa]}${local_snap_file}'${snap_file_type};g")
-			local_additional_tasks+="${local_snap_encrypt} ${snap_set[aa]}${local_snap_file}${snap_file_type_static}${snap_container_extension}${snap_compress_extension}"
+			local_snap_encrypt=$(echo "${snap_encrypt}" | sed "s;INFILE;${snap_set[aa]}${snap_string}${snap_file_type_static}${snap_container_extension}${snap_compress_extension};g" | sed "s;OUTFILE;${snap_set[aa]}${snap_string}${snap_file_type};g")
+			local_additional_tasks+="${local_snap_encrypt} ${snap_set[aa]}${snap_string}${snap_file_type_static}${snap_container_extension}${snap_compress_extension}"
 		fi
 	fi
 	if [[ -n "${config_user}" ]]; then
-		local_additional_tasks+=" && chown -R ${config_user} '${snap_set[aa]}${local_snap_file}'${snap_file_type}"
+		local_additional_tasks+=" && chown -R ${config_user} ${snap_set[aa]}${snap_string}${snap_file_type}"
 	fi
 
 	if [[ "${mode_create}" == "pipe" ]]; then
 		if [[ "${mode}" == "file" ]]; then
-			command_part1="cat '${root_set[aa]}'"
+			command_part1="cat ${root_set[aa]}"
 		elif [[ "${mode}" == "mysql" ]]; then
-			command_part1="mysqldump --defaults-extra-file=${config_credentials} --routines --triggers --single-transaction -h ${config_sql_server} '${snap_file}'"
+			command_part1="mysqldump --defaults-extra-file=${config_credentials} --routines --triggers --single-transaction -h ${sql_server} ${root_set[aa]}"
 		elif [[ "${mode}" == "pgsql" ]]; then
-			command_part1="pg_dump -h ${config_sql_server} -U ${config_credentials} -C -F c '${snap_file}'"
+			command_part1="pg_dump -h ${sql_server} -U ${config_credentials} -C -F c ${root_set[aa]}"
 		elif [[ "${mode}" == "ldap" ]]; then
-			command_part1="slapcat -n '${root_set[aa]}'"
+			command_part1="slapcat -n ${root_set[aa]}"
 		fi
 		command_part1+="${snap_compress}""${snap_encrypt}"
-		command_part2="cat > '${snap_set[aa]}${local_snap_file}'${snap_file_type}${local_additional_tasks}"
-		command="${config_ssh_source_part1}${command_part1}${config_ssh_source_part2} | ${config_ssh_target_part1}${command_part2}${config_ssh_target_part2}"
+		command_part2="cat > ${snap_set[aa]}${snap_string}${snap_file_type}${local_additional_tasks}"
+		command="${ssh_source_p1}${command_part1}${ssh_source_p2} | ${ssh_target_p1}${command_part2}${ssh_target_p2}"
 
 	elif [[ "${mode_create}" == "rsync" ]]; then
 		if [[ "${mode}" == "tar" ]]; then
 			if [[ -n "${container_source}" ]]; then
-				command="${config_ssh_target_part1}tar --remove-files -${container_parameter}C ${snap_set[aa]}${container_source} -f ${snap_set[aa]}${local_snap_file}${snap_file_type_static}${snap_container_extension}${local_additional_tasks}${config_ssh_target_part2}"
+				command="${ssh_target_p1}tar --remove-files -${container_parameter}C ${container_dir}${container_source} -f ${snap_set[aa]}${snap_string}${snap_file_type_static}${snap_container_extension}${local_additional_tasks}${ssh_target_p2}"
+				unset container_source
 			fi; else
 
-			if [[ -n "${ssh_rsync_source}" ]] || [[ -n "${ssh_rsync_target}" ]]; then
-				command="rsync ${config_options_rsync} ${ssh_rsync_source}'${root_set[aa]}'${config_options_rsync2} ${ssh_rsync_target}'${snap_set[aa]}${local_snap_file}'${snap_file_type_static}${local_additional_tasks}"; else
-				command="${config_ssh_source_part1}rsync ${config_options_rsync} '${root_set[aa]}'${config_options_rsync2} '${snap_set[aa]}${local_snap_file}'${snap_file_type_static}${local_additional_tasks}${config_ssh_source_part2}"
+			if [[ -n "${ssh_source_rsync}" ]] || [[ -n "${ssh_rsync_target}" ]]; then
+				command="rsync ${config_options_rsync} ${ssh_source_rsync}${root_set[aa]}${config_options_rsync2} ${ssh_rsync_target}${snap_set[aa]}${snap_string}${snap_file_type_static}${local_additional_tasks}"; else
+				command="${ssh_source_p1}rsync ${config_options_rsync} ${root_set[aa]}${config_options_rsync2} ${snap_set[aa]}${snap_string}${snap_file_type_static}${local_additional_tasks}${ssh_source_p2}"
 			fi
 		fi
-	fi
-
-	if [[ -n "${container_create}" ]]; then
-		container_source+=" $(echo ${local_snap_file}${snap_file_type} | sed 's/ /\\ /g')"
 	fi
 }
 
@@ -365,19 +376,19 @@ function do-snapdel() {
 		if [[ "${local_mode}" == "kvm" ]]; then
 			snap_del_string=$(echo "${snap_del}" | cut -d ":" -f 2-)
 			snap_del=$(echo "${snap_del}" | cut -d ":" -f 1)
-			command="${local_ssh_1}qm delsnapshot '${snap_del}' ${snap_del_string}${local_ssh_2}"
+			command="${local_ssh_1}qm delsnapshot ${snap_del} ${snap_del_string}${local_ssh_2}"
 
 		elif [[ "${local_mode}" == "zfs" ]]; then
-			command="${local_ssh_1}zfs destroy '${snap_del}'${local_ssh_2}"
+			command="${local_ssh_1}zfs destroy ${snap_del}${local_ssh_2}"
 
 		elif [[ "${local_mode}" == "btrfs" ]]; then
-			command="${local_ssh_1}btrfs subvolume delete '${snap_del}'${local_ssh_2}"
+			command="${local_ssh_1}btrfs subvolume delete ${snap_del}${local_ssh_2}"
 
 		elif [[ "${local_mode}" == "rsync" ]] || [[ "${local_mode}" == "pipe" ]]; then
-			command="${local_ssh_1}rm -rf '${snap_del}'${local_ssh_2}"
+			command="${local_ssh_1}rm -rf ${snap_del}${local_ssh_2}"
 
 		elif [[ "${local_mode}" == "lxd" ]]; then
-			command="${local_ssh_1}lxc delete '${snap_del}'${local_ssh_2}"
+			command="${local_ssh_1}lxc delete ${snap_del}${local_ssh_2}"
 		fi
 
 		local_snap_shots=$(echo "${local_snap_shots}" | tail -n +2)
@@ -492,7 +503,7 @@ if [[ -n "${mode}" ]]; then
 		mode_snapshot=${mode}
 
 	elif [[ "${mode}" == "mysql" ]] || [[ "${mode}" == "pgsql" ]]; then
-		config_sql_server=localhost
+		sql_server=localhost
 		mode_create=pipe
 		mode_snapshot=file
 
@@ -543,10 +554,12 @@ fi
 
 if [[ "${mode_create}" == "zfs" ]] || [[ "${mode_create}" == "kvm" ]]; then
 	snap_string_separator_1="@"
+elif [[ "${mode_create}" == "kvm" ]]; then
+	unset snap_string_separator_1
 elif [[ ! -n "${snap_string_separator_1}" ]]; then
 	snap_string_separator_1="_"
 fi
-snap_string_complete=${snap_string_separator_1}${snap_string}
+snap_string=${snap_string_separator_1}${snap_string}
 
 if [[ -n "${config_server}" ]]; then
 	if [[ -n "${config_port}" ]]; then
@@ -565,35 +578,35 @@ if [[ -n "${config_server}" ]]; then
 	fi
 
 	if [[ "${snap_location}" == "server" ]]; then
-		config_ssh_source_part1="ssh -S ~/.ssh/%C ${config_server}${config_port} \""
-		config_ssh_source_part2="\""
-		config_ssh_target_part1="ssh -S ~/.ssh/%C ${config_server}${config_port} \""
-		config_ssh_target_part2="\""
+		ssh_source_p1="ssh -S ~/.ssh/%C ${config_server}${config_port} \""
+		ssh_source_p2="\""
+		ssh_target_p1="ssh -S ~/.ssh/%C ${config_server}${config_port} \""
+		ssh_target_p2="\""
 
 	elif	[[ "${snap_location}" == "local" ]]; then
-		config_ssh_source_part1="ssh -S ~/.ssh/%C ${config_server}${config_port} \""
-		config_ssh_source_part2="\""
+		ssh_source_p1="ssh -S ~/.ssh/%C ${config_server}${config_port} \""
+		ssh_source_p2="\""
 
 		if [[ "${mode_create}" == "rsync" ]]; then
-			ssh_rsync_source="-e \"ssh -S ~/.ssh/%C ${config_port}\" ${config_server}:"
+			ssh_source_rsync="-e \"ssh -S ~/.ssh/%C ${config_port}\" ${config_server}:"
 		fi
 
 	elif	[[ "${snap_location}" == "remote" ]]; then
-		config_ssh_target_part1="ssh -S ~/.ssh/%C ${config_server}${config_port} \""
-		config_ssh_target_part2="\""
+		ssh_target_p1="ssh -S ~/.ssh/%C ${config_server}${config_port} \""
+		ssh_target_p2="\""
 
 		if [[ "${mode_create}" == "rsync" ]]; then
 			ssh_rsync_target="-e \"ssh -S ~/.ssh/%C ${config_port}\" ${config_server}:"
 		fi
 
 	elif	[[ "${snap_location}" == "direct" ]]; then
-		config_sql_server=${config_server}; else
+		sql_server=${config_server}; else
 
 		echo "something is wrong with the ssh settings" && exit 1
 	fi
 
-	config_server=${config_server}${config_port}
-	unset snap_location config_port
+	ssh_server="-S ~/.ssh/%C ${config_server}${config_port}"
+	unset config_server config_port snap_location
 fi
 
 if [[ "${mode_snapshot}" == "file" ]]; then
@@ -618,27 +631,23 @@ do	aa=$((${aa} + 1))
 		continue
 	fi
 
-	# if snap_set and root_set contained spaces they had been translated to "~" and have to be retranslated to " "
-	snap_set[aa]=$(echo "${snap_set[aa]}" | tr "~" " ")
-	root_set[aa]=$(echo "${root_set[aa]}" | tr "~" " ")
-
 	if [[ -n "${check_commands}" ]]; then
 		printf -- "\n--------------- ${root_set[aa]} ---------------\n"
 	fi
 
 	if [[ "${mode_snapshot}"  == "btrfs" ]]; then
-		get-snapshots "${mode_snapshot}" "${snap_set[aa]}${snap_string_separator_1}" "${snap_name}" "${snap_date}" "${config_server}";
+		get-snapshots "${mode_snapshot}" "${snap_set[aa]}${snap_string_separator_1}" "${snap_name}" "${snap_date}" "${ssh_server}";
 	elif [[ "${mode_snapshot}" == "file" ]]; then
 		check-file
-		get-snapshots "${mode_snapshot}" "${snap_set[aa]}${snap_file}${snap_string_separator_1}" "${snap_name}" "${snap_date}" "${config_server}"; else
-		get-snapshots "${mode_snapshot}" "${root_set[aa]}" "${snap_name}" "${snap_date}" "${config_server}"
+		get-snapshots "${mode_snapshot}" "${snap_set[aa]}${snap_string_separator_1}" "${snap_name}" "${snap_date}" "${ssh_server}"; else
+		get-snapshots "${mode_snapshot}" "${root_set[aa]}" "${snap_name}" "${snap_date}" "${ssh_server}"
 	fi
 
 	# If snapshots not created by this script should be handled, existing_only can be set
 	if [[ ! "${previous}" == "exists" ]] && [[ ! -n "${snap_new_impede}" ]]; then
 		if [[ "${mode_snapshot}" == "file" ]]; then
-			snap-file "${snap_file}${snap_string_complete}"; else
-			snap-all
+			snap-file "${snap_string}"; else
+			snap-all "${mode_create}" "${root_set[aa]}" "${snap_string}" ${snap_set[aa]}
 		fi
 		if [[ -n "${check_commands}" ]]; then
 			echo "${command}"; else
@@ -648,14 +657,14 @@ do	aa=$((${aa} + 1))
 
 	if [[ "${config_function}" == "list" ]]; then
 		if [[ -n "${add_snapshot}" ]] && [[ ! -n "${snap_new_impede}" ]]; then
-			snap_shots_strict=${snap_shots_strict}$'\n'"${snap_set[aa]}""${snap_file}"${snap_string_complete}${snap_file_type}
+			snap_shots_strict=${snap_shots_strict}$'\n'"${snap_set[aa]}"${snap_string}${snap_file_type}
 		fi
 		snap_number_strict=$(echo "${snap_shots_strict}" | grep -v '^$' | awk 'END{print NR}')
 		if [[ -n "${check_snapshots}" ]]; then
 			printf "The Snapshotnumber is ${snap_number_strict}:\n${snap_shots_strict}\n"
 			continue
 		fi
-		do-snapdel "${snap_shots_strict}" "${mode_create}" "${snap_number_strict}" "${snap_limit_current}" "${config_ssh_target_part1}" "${config_ssh_target_part2}"
+		do-snapdel "${snap_shots_strict}" "${mode_create}" "${snap_number_strict}" "${snap_limit_current}" "${ssh_target_p1}" "${ssh_target_p2}"
 	fi
 	unset snap_file snap_file_type snap_file_type_static config_options_rsync2
 done
