@@ -302,6 +302,16 @@ function snap-all() {
 	local_snap_string="${3}"
 	local_target="${4}"
 	if [[ "${local_mode}" == "zfs" ]]; then
+		if [[ -n "${snap_pre_rollback}" ]]; then
+			if [[ -n "${check_commands}" ]]; then
+				echo "${ssh_source_p1}zfs rollback ${snap_pre_rollback}${ssh_source_p2}"; else
+				if [[ -n "${ssh_source_p1}" ]]; then
+					ssh ${ssh_server} "zfs rollback ${snap_pre_rollback}"; else
+					zfs rollback "${snap_pre_rollback}"
+				fi
+			fi
+			snap_pre_rollback="set"
+		fi
 		command="${ssh_source_p1}zfs snapshot ${local_root}${local_snap_string}${ssh_source_p2}"
 
 	elif [[ "${local_mode}" == "btrfs" ]]; then
@@ -444,7 +454,7 @@ if [[ "${config_function}" == "list" ]]; then
 	if [[ "${snap_flags}" == "existing" ]]; then
 		snap_new_impede=set;
 		unset snap_flags
-	elif [[ "${snap_flags}" == "archival" ]]; then
+	elif [[ "${snap_flags}" == "rollback" ]]; then
 		snap_pre_rollback=$(awk -v condition1="snap_flags" '$1 == condition1 { print $4 }' <<< "${block_config}" | tr ":" " ")
 		unset snap_flags
 	fi
@@ -611,6 +621,14 @@ fi
 
 if [[ "${mode_snapshot}" == "file" ]]; then
 	set-file
+elif [[ "${mode_snapshot}" == "zfs" ]]; then
+	if [[ "${snap_pre_rollback}" ]]; then
+		probe=$(echo "${snap_pre_rollback}" | grep "${current_frequency}")
+		if [[ -n "${probe}" ]]; then
+			snap_pre_rollback="set"; else
+			unset snap_pre_rollback
+		fi
+	fi
 fi
 
 if [[ -n "${check_config}" ]]; then
@@ -646,7 +664,7 @@ do	aa=$((${aa} + 1))
 	# If snapshots not created by this script should be handled, existing_only can be set
 	if [[ ! "${previous}" == "exists" ]] && [[ ! -n "${snap_new_impede}" ]]; then
 		if [[ "${mode_snapshot}" == "file" ]]; then
-			snap-file "${snap_string}"; else
+			snap-file; else
 			snap-all "${mode_create}" "${root_set[aa]}" "${snap_string}" ${snap_set[aa]}
 		fi
 		if [[ -n "${check_commands}" ]]; then
