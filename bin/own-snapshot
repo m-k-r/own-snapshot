@@ -494,9 +494,11 @@ if [[ "${config_function}" == "list" ]]; then
 	snap_string="${snap_name}""${snap_date}"
 
 	# if the last field in root_set is tar, then the previous fields will stored in a tar-file
-	container_create=$(echo "${root_set[-1]}" | grep "tar" 2> /dev/null)
+	if [[ -n "${root_set[@]}" ]]; then
+		container_create=$(echo "${root_set[-1]}" | grep "tar" 2> /dev/null)
+	fi
 	unset element block_config block_table supported_frequencies; else
-
+	# translations own-backup arguments
 	if [[ -n "${config_server}" ]]; then
 		probe=$(echo "${config_server}" | grep "~" || true)
 		if [[ -n "${probe}" ]]; then
@@ -504,6 +506,8 @@ if [[ "${config_function}" == "list" ]]; then
 			config_server=$(echo "${config_server}" | cut -d "~" -f 1)
 		fi
 	fi
+	snap_name=$(echo "${snap_string}" | cut -d "_" -f 1)_
+	snap_date=$(echo "${snap_string}" | cut -d "_" -f 2)
 fi
 
 # translate mode to mode_create and mode_snapshot
