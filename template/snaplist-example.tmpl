@@ -1,12 +1,12 @@
 #config#
 version = 1.2
 server = testserver.testdomain.com 2222
-mode = btrfs/zfs/directory/file/kvm/lxd/mysql/pgsql/ldap
+mode = btrfs/zfs/file/kvm/lxd/mysql/pgsql/ldap
 label = auto-
 identifier = empty/number/frequency
 dateformat = %Y%m%d-%H%M%S
 separator = _ _
-snap_flags = rollback hourly:daily:weekly(zfs-only)/existing/both:file:container(tar-compression)
+snap_flags = rollback hourly:daily:weekly(zfs-only - rollback before snapshot)/existing(all - no new snapshot)/both:file:container(tar - compression/encryption)
 snap_location = server(default)/local(file/directory-only)/remote(file/directory-only)/direct(sql-only)
 credentials = ~/.mysqldump.cnf
 encryption = /etc/ssl/mycert.pem
@@ -30,5 +30,5 @@ tar
 #target#
 /mnt/Pools/root-snapshots/root
 /mnt/Pools/root-snapshots/home
-/mnt/Pools/root-snapshots/test.tar
+/mnt/Pools/root-snapshots/test_container
 #target#

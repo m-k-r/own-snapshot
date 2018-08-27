@@ -508,6 +508,9 @@ if [[ "${config_function}" == "list" ]]; then
 	fi
 	snap_name=$(echo "${snap_string}" | cut -d "_" -f 1)_
 	snap_date=$(echo "${snap_string}" | cut -d "_" -f 2)
+	if [[ "${mode}" == "zfs" ]]; then
+		root_set=(${snap_set[@]})
+	fi
 fi
 
 # translate mode to mode_create and mode_snapshot
@@ -566,7 +569,7 @@ if [[ -n "${output}" ]]; then
 	add_snapshot="set"
 fi
 
-if [[ "${mode_create}" == "zfs" ]] || [[ "${mode_create}" == "kvm" ]]; then
+if [[ "${mode_create}" == "zfs" ]]; then
 	snap_string_separator_1="@"
 elif [[ "${mode_create}" == "kvm" ]]; then
 	unset snap_string_separator_1
