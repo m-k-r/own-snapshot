@@ -546,7 +546,7 @@ if [[ -n "${output}" ]]; then
 
 	elif [[ "${output}" == "previous" ]] || [[ "${output}" == "progress" ]]; then
 		# this is a dummy for own-backup until it is updated
-		:
+		add_snapshot="set"
 
 	elif [[ "${output}" == "commands" ]] || [[ "${output}" == "snapvars" ]]; then
 		check_commands="set"
