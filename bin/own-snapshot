@@ -366,7 +366,7 @@ function snap-file() {
 		elif [[ "${mode}" == "mysql" ]]; then
 			command_part1="mysqldump --defaults-extra-file=${config_credentials} --routines --triggers --single-transaction -h ${app_server} -P ${app_server_port} ${root_set[aa]}"
 		elif [[ "${mode}" == "pgsql" ]]; then
-			command_part1="pg_dump -h ${app_server} -p${app_server_port}  -U ${config_credentials} -C -F c ${root_set[aa]}"
+			command_part1="pg_dump -h ${app_server} -p ${app_server_port} -U ${config_credentials} -C -F c ${root_set[aa]}"
 		elif [[ "${mode}" == "mongodb" ]]; then
 			command_part1="mongodump --quiet --archive --host ${app_server} --port ${app_server_port} --db ${root_set[aa]}"
 		elif [[ "${mode}" == "ldap" ]]; then
@@ -519,6 +519,12 @@ if [[ "${config_function}" == "list" ]]; then
 	snap_name="${snap_label}""${snap_identifier}""${snap_string_separator_2}"
 	snap_string="${snap_name}""${snap_date}"
 
+	if [[ ! -n ${app_server_port} ]]; then
+		app_server_port_name="app_server_port_${mode}"
+		app_server_port=${!app_server_port_name}
+		unset app_server_port_name
+	fi
+
 	# if the last field in root_set is tar, then the previous fields will stored in a tar-file
 	if [[ -n "${root_set[@]}" ]]; then
 		container_create=$(echo "${root_set[-1]}" | grep "tar" 2> /dev/null)
@@ -533,11 +539,6 @@ if [[ "${config_function}" == "list" ]]; then
 		fi
 	fi
 	# if not set by element apply default port for current mode if exist
-	if [[ ! -n ${app_server_port} ]]; then
-		app_server_port_name="app_server_port_${mode}"
-		app_server_port=${!app_server_port_name}
-		unset app_server_port_name
-	fi
 	snap_name=$(echo "${snap_string}" | cut -d "_" -f 1)_
 	snap_date=$(echo "${snap_string}" | cut -d "_" -f 2)
 	if [[ "${mode}" == "zfs" ]]; then
