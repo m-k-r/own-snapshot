@@ -35,6 +35,11 @@ dir_conf=/etc/own-snapshot
 config_options_rsync="-a"
 supported_mode="btrfs zfs file kvm lxd mysql pgsql mongodb elastic ldap"
 supported_element_version=1.2
+app_server=localhost
+app_server_port_pgsql=5432
+app_server_port_mysql=3306
+app_server_port_mongodb=27017
+app_server_port_elastic=9200
 
 
 # --------------------------------- Parameter ----------------------------------
@@ -296,9 +301,10 @@ function get-snapshots() {
 		local_repo=$(echo "${local_root}" | cut -d ":" -f 2)
 		local_root=$(echo "${local_root}" | cut -d ":" -f 1)
 		if [[ -n "${ssh_target_p1}" ]]; then
-			snap_shots_strict=$(ssh ${local_server} "curl -X GET ${sql_server}:9200/_snapshot/${local_repo}/_all?verbose=false" 2> /dev/null); else
-			snap_shots_strict=$(curl -X GET ${sql_server}:9200/_snapshot/${local_repo}/_all?verbose=false 2> /dev/null)
+			snap_shots_strict=$(ssh ${local_server} "curl -X GET ${app_server}:${app_server_port}/_snapshot/${local_repo}/_all?verbose=false" 2> /dev/null); else
+			snap_shots_strict=$(curl -X GET ${app_server}:${app_server_port}/_snapshot/${local_repo}/_all?verbose=false 2> /dev/null)
 		fi
+		# for some reason awk doesn't read last line. Therefore an empty last line has to be left.
 		snap_shots_strict=$(echo "${snap_shots_strict}" | cut -d '{' -f 3- | sed 's/}]}/\n/g' | sed 's/},{/\n/g' | awk -F',' -v OFS=':' '{print $1,$3}' | sed 's/"//g' | awk -F ':' -v condition1="[${local_root}]" '$4 == condition1 { print $2 }' | sed -e "s/^/${local_repo}\//" | grep ${local_identifier} 2> /dev/null)
 	fi
 	previous=$(echo "${snap_shots_strict}" | grep "${local_datestring}")
@@ -333,7 +339,7 @@ function snap-all() {
 		command="${ssh_source_p1}qm snapshot ${local_root} ${local_snap_string}${ssh_source_p2}"
 
 	elif [[ "${local_mode}" == "elastic" ]]; then
-		command="${ssh_source_p1}curl -X PUT ${sql_server}:9200/_snapshot/${local_target}/${local_snap_string}?wait_for_completion=true -H 'Content-Type: application/json' -d' {\"indices\": \"graylog_2\"}'${ssh_source_p2}"
+		command="${ssh_source_p1}curl -X PUT ${app_server}:${app_server_port}/_snapshot/${local_target}/${local_snap_string}?wait_for_completion=true -H 'Content-Type: application/json' -d' {\"indices\": \"graylog_2\"}'${ssh_source_p2}"
 	fi
 }
 
@@ -358,11 +364,11 @@ function snap-file() {
 		if [[ "${mode}" == "file" ]]; then
 			command_part1="cat ${root_set[aa]}"
 		elif [[ "${mode}" == "mysql" ]]; then
-			command_part1="mysqldump --defaults-extra-file=${config_credentials} --routines --triggers --single-transaction -h ${sql_server} ${root_set[aa]}"
+			command_part1="mysqldump --defaults-extra-file=${config_credentials} --routines --triggers --single-transaction -h ${app_server} -P ${app_server_port} ${root_set[aa]}"
 		elif [[ "${mode}" == "pgsql" ]]; then
-			command_part1="pg_dump -h ${sql_server} -U ${config_credentials} -C -F c ${root_set[aa]}"
+			command_part1="pg_dump -h ${app_server} -p${app_server_port}  -U ${config_credentials} -C -F c ${root_set[aa]}"
 		elif [[ "${mode}" == "mongodb" ]]; then
-			command_part1="mongodump --quiet --db ${root_set[aa]} --archive"
+			command_part1="mongodump --quiet --archive --host ${app_server} --port ${app_server_port} --db ${root_set[aa]}"
 		elif [[ "${mode}" == "ldap" ]]; then
 			command_part1="slapcat -n ${root_set[aa]}"
 		fi
@@ -417,7 +423,7 @@ function do-snapdel() {
 		elif [[ "${local_mode}" == "elastic" ]]; then
 			local_repo=$(echo "${snap_del}" | cut -d "/" -f 1)
 			local_snap=$(echo "${snap_del}" | cut -d "/" -f 2)
-			command="${local_ssh_1}curl -X DELETE ${sql_server}:9200/_snapshot/${local_repo}/${local_snap}${local_ssh_2}"
+			command="${local_ssh_1}curl -X DELETE ${app_server}:${app_server_port}/_snapshot/${local_repo}/${local_snap}${local_ssh_2}"
 		fi
 
 		local_snap_shots=$(echo "${local_snap_shots}" | tail -n +2)
@@ -459,6 +465,7 @@ if [[ "${config_function}" == "list" ]]; then
 	fi
 	config_server=$(awk -v condition1="server" '$1 == condition1 { print $3 }' <<< "${block_config}")
 	config_port=$(awk -v condition1="server" '$1 == condition1 { print $4 }' <<< "${block_config}")
+	app_server_port=$(awk -v condition1="server" '$1 == condition1 { print $5 }' <<< "${block_config}")
 	mode=$(awk -v condition1="mode" '$1 == condition1 { print $3 }' <<< "${block_config}")
 	snap_label=$(awk -v condition1="label" '$1 == condition1 { print $3 }' <<< "${block_config}")
 	# snap_string can be given by argument so that all snapshots follow the same scheme
@@ -525,6 +532,12 @@ if [[ "${config_function}" == "list" ]]; then
 			config_server=$(echo "${config_server}" | cut -d "~" -f 1)
 		fi
 	fi
+	# if not set by element apply default port for current mode if exist
+	if [[ ! -n ${app_server_port} ]]; then
+		app_server_port_name="app_server_port_${mode}"
+		app_server_port=${!app_server_port_name}
+		unset app_server_port_name
+	fi
 	snap_name=$(echo "${snap_string}" | cut -d "_" -f 1)_
 	snap_date=$(echo "${snap_string}" | cut -d "_" -f 2)
 	if [[ "${mode}" == "zfs" ]]; then
@@ -534,22 +547,11 @@ fi
 
 # translate mode to mode_create and mode_snapshot
 if [[ -n "${mode}" ]]; then
-	if [[ "${mode}" == "btrfs" ]] || [[ "${mode}" == "kvm" ]] || [[ "${mode}" == "lxd" ]] || [[ "${mode}" == "zfs" ]]; then
+	if [[ "${mode}" == "btrfs" ]] || [[ "${mode}" == "kvm" ]] || [[ "${mode}" == "lxd" ]] || [[ "${mode}" == "zfs" ]] || [[ "${mode}" == "elastic" ]]; then
 		mode_create=${mode}
 		mode_snapshot=${mode}
 
-	elif [[ "${mode}" == "elastic" ]]; then
-		sql_server=localhost
-		mode_create=${mode}
-		mode_snapshot=${mode}
-
-	elif [[ "${mode}" == "mysql" ]] || [[ "${mode}" == "pgsql" ]]; then
-		sql_server=localhost
-		mode_create=pipe
-		mode_snapshot=file
-
-	elif [[ "${mode}" == "mongodb" ]]; then
-		sql_server=localhost
+	elif [[ "${mode}" == "mysql" ]] || [[ "${mode}" == "pgsql" ]] || [[ "${mode}" == "mongodb" ]]; then
 		mode_create=pipe
 		mode_snapshot=file
 
@@ -646,7 +648,7 @@ if [[ -n "${config_server}" ]]; then
 		fi
 
 	elif	[[ "${snap_location}" == "direct" ]]; then
-		sql_server=${config_server}; else
+		app_server=${config_server}; else
 
 		echo "something is wrong with the ssh settings" && exit 1
 	fi
