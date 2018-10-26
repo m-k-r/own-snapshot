@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 #
 # Author:	Marcel Keller (m-k-r)
-# Usage:	uses config files to create and delete snapshots for btrfs, zfs, file, directory, mysql, pgsql and kvm
+# Usage:	uses config files to create and delete snapshots for btrfs, zfs, file, kvm, lxd, mysql, pgsql, mongodb and ldap
 # License:	GPLv3 http://www.gnu.org/licenses/gpl-3.0
 #
 # ----------------------------- Global Variables ------------------------------
@@ -33,7 +33,7 @@ dir_root=/usr/local/own-snapshot
 dir_modules=${dir_root}/modules
 dir_conf=/etc/own-snapshot
 config_options_rsync="-a"
-supported_mode="btrfs zfs file kvm lxd mysql pgsql ldap"
+supported_mode="btrfs zfs file kvm lxd mysql pgsql mongodb ldap"
 supported_element_version=1.2
 
 
@@ -349,6 +349,8 @@ function snap-file() {
 			command_part1="mysqldump --defaults-extra-file=${config_credentials} --routines --triggers --single-transaction -h ${sql_server} ${root_set[aa]}"
 		elif [[ "${mode}" == "pgsql" ]]; then
 			command_part1="pg_dump -h ${sql_server} -U ${config_credentials} -C -F c ${root_set[aa]}"
+		elif [[ "${mode}" == "mongodb" ]]; then
+			command_part1="mongodump --quiet --db ${root_set[aa]} --archive"
 		elif [[ "${mode}" == "ldap" ]]; then
 			command_part1="slapcat -n ${root_set[aa]}"
 		fi
@@ -520,6 +522,11 @@ if [[ -n "${mode}" ]]; then
 		mode_snapshot=${mode}
 
 	elif [[ "${mode}" == "mysql" ]] || [[ "${mode}" == "pgsql" ]]; then
+		sql_server=localhost
+		mode_create=pipe
+		mode_snapshot=file
+
+	elif [[ "${mode}" == "mongodb" ]]; then
 		sql_server=localhost
 		mode_create=pipe
 		mode_snapshot=file
