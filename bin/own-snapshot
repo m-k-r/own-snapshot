@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 #
 # Author:	Marcel Keller (m-k-r)
-# Usage:	uses config files to create and delete snapshots for btrfs, zfs, file, kvm, lxd, mysql, pgsql, mongodb and ldap
+# Usage:	uses config files to create and delete snapshots for btrfs, zfs, file, kvm, lxd, mysql, pgsql, mongodb elastic and ldap
 # License:	GPLv3 http://www.gnu.org/licenses/gpl-3.0
 #
 # ----------------------------- Global Variables ------------------------------
@@ -33,7 +33,7 @@ dir_root=/usr/local/own-snapshot
 dir_modules=${dir_root}/modules
 dir_conf=/etc/own-snapshot
 config_options_rsync="-a"
-supported_mode="btrfs zfs file kvm lxd mysql pgsql mongodb ldap"
+supported_mode="btrfs zfs file kvm lxd mysql pgsql mongodb elastic ldap"
 supported_element_version=1.2
 
 
@@ -254,7 +254,7 @@ function check-file() {
 }
 
 function get-snapshots() {
-	local local_mode local_server local_root local_identifier local_datestring snap_shots
+	local local_mode local_server local_root local_identifier local_datestring snap_shots local_target
 	local_mode="${1}"
 	local_root="${2}"
 	local_identifier="${3}"
@@ -291,6 +291,15 @@ function get-snapshots() {
 			snap_shots_strict=$(qm listsnapshot "${local_root}" | awk '{print $1}' | grep ${local_identifier} 2> /dev/null)
 		fi
 		snap_shots_strict=$(echo "${snap_shots_strict}" | sed "s;^;${local_root}:;" 2> /dev/null)
+
+	elif [[ "${local_mode}" == "elastic" ]]; then
+		local_repo=$(echo "${local_root}" | cut -d ":" -f 2)
+		local_root=$(echo "${local_root}" | cut -d ":" -f 1)
+		if [[ -n "${ssh_target_p1}" ]]; then
+			snap_shots_strict=$(ssh ${local_server} "curl -X GET ${sql_server}:9200/_snapshot/${local_repo}/_all?verbose=false" 2> /dev/null); else
+			snap_shots_strict=$(curl -X GET ${sql_server}:9200/_snapshot/${local_repo}/_all?verbose=false 2> /dev/null)
+		fi
+		snap_shots_strict=$(echo "${snap_shots_strict}" | cut -d '{' -f 3- | sed 's/}]}/\n/g' | sed 's/},{/\n/g' | awk -F',' -v OFS=':' '{print $1,$3}' | sed 's/"//g' | awk -F ':' -v condition1="[${local_root}]" '$4 == condition1 { print $2 }' | sed -e "s/^/${local_repo}\//" | grep ${local_identifier} 2> /dev/null)
 	fi
 	previous=$(echo "${snap_shots_strict}" | grep "${local_datestring}")
 }
@@ -322,6 +331,9 @@ function snap-all() {
 
 	elif [[ "${local_mode}" == "kvm" ]]; then
 		command="${ssh_source_p1}qm snapshot ${local_root} ${local_snap_string}${ssh_source_p2}"
+
+	elif [[ "${local_mode}" == "elastic" ]]; then
+		command="${ssh_source_p1}curl -X PUT ${sql_server}:9200/_snapshot/${local_target}/${local_snap_string}?wait_for_completion=true -H 'Content-Type: application/json' -d' {\"indices\": \"graylog_2\"}'${ssh_source_p2}"
 	fi
 }
 
@@ -374,7 +386,7 @@ function snap-file() {
 }
 
 function do-snapdel() {
-	local local_snap_shots local_mode local_snap_number local_snap_limit local_ssh_1 local_ssh_2
+	local local_snap_shots local_mode local_snap_number local_snap_limit local_ssh_1 local_ssh_2 local_snap local_rep
 	local_snap_shots="${1}"
 	local_mode="${2}"
 	local_snap_number="${3}"
@@ -401,6 +413,11 @@ function do-snapdel() {
 
 		elif [[ "${local_mode}" == "lxd" ]]; then
 			command="${local_ssh_1}lxc delete ${snap_del}${local_ssh_2}"
+
+		elif [[ "${local_mode}" == "elastic" ]]; then
+			local_repo=$(echo "${snap_del}" | cut -d "/" -f 1)
+			local_snap=$(echo "${snap_del}" | cut -d "/" -f 2)
+			command="${local_ssh_1}curl -X DELETE ${sql_server}:9200/_snapshot/${local_repo}/${local_snap}${local_ssh_2}"
 		fi
 
 		local_snap_shots=$(echo "${local_snap_shots}" | tail -n +2)
@@ -521,6 +538,11 @@ if [[ -n "${mode}" ]]; then
 		mode_create=${mode}
 		mode_snapshot=${mode}
 
+	elif [[ "${mode}" == "elastic" ]]; then
+		sql_server=localhost
+		mode_create=${mode}
+		mode_snapshot=${mode}
+
 	elif [[ "${mode}" == "mysql" ]] || [[ "${mode}" == "pgsql" ]]; then
 		sql_server=localhost
 		mode_create=pipe
@@ -578,7 +600,7 @@ fi
 
 if [[ "${mode_create}" == "zfs" ]]; then
 	snap_string_separator_1="@"
-elif [[ "${mode_create}" == "kvm" ]]; then
+elif [[ "${mode_create}" == "kvm" ]] || [[ "${mode_create}" == "elastic" ]]; then
 	unset snap_string_separator_1
 elif [[ ! -n "${snap_string_separator_1}" ]]; then
 	snap_string_separator_1="_"
@@ -671,7 +693,9 @@ do	aa=$((${aa} + 1))
 		get-snapshots "${mode_snapshot}" "${snap_set[aa]}${snap_string_separator_1}" "${snap_name}" "${snap_date}" "${ssh_server}";
 	elif [[ "${mode_snapshot}" == "file" ]]; then
 		check-file
-		get-snapshots "${mode_snapshot}" "${snap_set[aa]}${snap_string_separator_1}" "${snap_name}" "${snap_date}" "${ssh_server}"; else
+		get-snapshots "${mode_snapshot}" "${snap_set[aa]}${snap_string_separator_1}" "${snap_name}" "${snap_date}" "${ssh_server}"
+	elif [[ "${mode_snapshot}" == "elastic" ]]; then
+		get-snapshots "${mode_snapshot}" "${root_set[aa]}:${snap_set[aa]}" "${snap_name}" "${snap_date}" "${ssh_server}"; else
 		get-snapshots "${mode_snapshot}" "${root_set[aa]}" "${snap_name}" "${snap_date}" "${ssh_server}"
 	fi
 
