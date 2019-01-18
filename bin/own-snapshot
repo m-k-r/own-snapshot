@@ -339,7 +339,7 @@ function snap-all() {
 		command="${ssh_source_p1}qm snapshot ${local_root} ${local_snap_string}${ssh_source_p2}"
 
 	elif [[ "${local_mode}" == "elastic" ]]; then
-		command="${ssh_source_p1}curl -X PUT ${app_server}:${app_server_port}/_snapshot/${local_target}/${local_snap_string}?wait_for_completion=true -H 'Content-Type: application/json' -d' {\"indices\": \"graylog_2\"}'${ssh_source_p2}"
+		command="${ssh_source_p1}curl -X PUT ${app_server}:${app_server_port}/_snapshot/${local_target}/${local_snap_string}?wait_for_completion=true -H 'Content-Type: application/json' -d' {\"indices\": \"${local_root}\"}'${ssh_source_p2}"
 	fi
 }
 
