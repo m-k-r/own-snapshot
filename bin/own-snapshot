@@ -292,8 +292,8 @@ function get-snapshots() {
 
 	elif [[ "${local_mode}" == "kvm" ]]; then
 		if [[ -n "${ssh_target_p1}" ]]; then
-			snap_shots_strict=$(ssh ${local_server} "qm listsnapshot ${local_root} | awk '{print $1}' | grep ${local_identifier} 2> /dev/null"); else
-			snap_shots_strict=$(qm listsnapshot "${local_root}" | awk '{print $1}' | grep ${local_identifier} 2> /dev/null)
+			snap_shots_strict=$(ssh ${local_server} "qm listsnapshot ${local_root} | awk '{print $2}' | grep ${local_identifier} 2> /dev/null"); else
+			snap_shots_strict=$(qm listsnapshot "${local_root}" | awk '{print $2}' | grep ${local_identifier} 2> /dev/null)
 		fi
 		snap_shots_strict=$(echo "${snap_shots_strict}" | sed "s;^;${local_root}:;" 2> /dev/null)
 
@@ -587,7 +587,7 @@ if [[ -n "${output}" ]]; then
 	elif [[ "${output}" == "snapshots" ]]; then
 		check_commands="set"
 		check_snapshots="set"
-		snap_new_impede=set
+		snap_new_impede="set"
 
 	elif [[ "${output}" == "full" ]]; then
 		check_config="set"
