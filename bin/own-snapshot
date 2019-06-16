@@ -26,8 +26,8 @@ parameter used by own-backup
  -n	target for snapshot
  -p	port for ssh
  -q	path to credentials file for sql
- -r	source for snapshot
  -s	server
+ -t	source for snapshot
  -z	certificate file/gpg id"
 dir_root=/usr/local/own-snapshot
 dir_modules=${dir_root}/modules
@@ -48,7 +48,7 @@ if [[ "$#" == "0" ]]; then
 	echo "${usage}" && exit 0
 fi
 
-while getopts ":c:e:if:l:m:n:o:p:q:r:s:z:vh" opt; do
+while getopts ":c:e:if:l:m:n:o:p:q:s:t:z:vh" opt; do
 	case ${opt} in
 		c)	arg_config=$OPTARG
 			;;
@@ -70,9 +70,9 @@ while getopts ":c:e:if:l:m:n:o:p:q:r:s:z:vh" opt; do
 			;;
 		q)	config_credentials=$OPTARG
 			;;
-		r)	root_set=($OPTARG)
-			;;
 		s)	config_server=$OPTARG
+			;;
+		t)	root_set=($OPTARG)
 			;;
 		z)	config_encryption=$OPTARG
 			;;

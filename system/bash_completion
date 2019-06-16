@@ -33,7 +33,7 @@ _own-snapshot() {
 			;;
 		-o)	list="commands config full previous snapshots"
 			;;
-		*)	list="-c -e -i -f -l -m -n -o -p -q -r -s -z -v -h"
+		*)	list="-c -e -i -f -l -m -n -o -p -q -s -t -z -v -h"
 			;;
 	esac
 
