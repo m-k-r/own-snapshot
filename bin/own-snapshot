@@ -17,6 +17,7 @@ usage="usage: own-snapshot [parameter]
  -f	the frequency as defined in the config file (hourly, daily, weekly)
  -l	either date-string (list) or complete label (single). mainly used by own-backup
  -o	output level: previous, commands, config, snapshots, full
+ -r	rollback: first, last, interactive or number
  -v	show version of this script
  -h	this page
 
@@ -48,7 +49,7 @@ if [[ "$#" == "0" ]]; then
 	echo "${usage}" && exit 0
 fi
 
-while getopts ":c:e:if:l:m:n:o:p:q:s:t:z:vh" opt; do
+while getopts ":c:e:if:l:m:n:o:p:q:r:s:t:z:vh" opt; do
 	case ${opt} in
 		c)	arg_config=$OPTARG
 			;;
@@ -69,6 +70,9 @@ while getopts ":c:e:if:l:m:n:o:p:q:s:t:z:vh" opt; do
 		p)	config_port=($OPTARG)
 			;;
 		q)	config_credentials=$OPTARG
+			;;
+		r)	do_rollback=$OPTARG
+			snap_new_impede=set
 			;;
 		s)	config_server=$OPTARG
 			;;
@@ -275,37 +279,42 @@ function get-snapshots() {
 		if [[ "${snap_pre_rollback}" == "set" ]]; then
 			snap_pre_rollback=${snap_shots##*$'\n'}
 		fi
-		snap_shots_strict=$(echo "${snap_shots}" | grep ${local_identifier})
 
 	elif [[ "${local_mode}" == "btrfs" ]] || [[ "${1}" == "file" ]]; then
 		if [[ -n "${ssh_target_p1}" ]]; then
-			snap_shots_strict=$(ssh ${local_server} "find ${local_root}${local_identifier}* -maxdepth 0 2> /dev/null"); else
-			snap_shots_strict=$(find "${local_root}"${local_identifier}* -maxdepth 0 2> /dev/null)
+			snap_shots=$(ssh ${local_server} "find ${local_root}${local_identifier}* -maxdepth 0 2> /dev/null"); else
+			snap_shots=$(find "${local_root}"${local_identifier}* -maxdepth 0 2> /dev/null)
 		fi
 
 	elif [[ "${local_mode}" == "lxd" ]]; then
 		if [[ -n "${ssh_target_p1}" ]]; then
-			snap_shots_strict=$(ssh ${local_server} "lxc info ${local_root} | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' 2> /dev/null"); else
-			snap_shots_strict=$(lxc info "${local_root}" | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' 2> /dev/null)
+			snap_shots=$(ssh ${local_server} "lxc info ${local_root} | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' 2> /dev/null"); else
+			snap_shots=$(lxc info "${local_root}" | sed -e '1,/^Snapshots:/d' | awk ' { print $1 } ' 2> /dev/null)
 		fi
-		snap_shots_strict=$(echo "${snap_shots_strict}" | sed "s;^;${local_root}/;" 2> /dev/null)
+		snap_shots=$(echo "${snap_shots}" | sed "s;^;${local_root}/;" 2> /dev/null)
 
 	elif [[ "${local_mode}" == "kvm" ]]; then
 		if [[ -n "${ssh_target_p1}" ]]; then
-			snap_shots_strict=$(ssh ${local_server} "qm listsnapshot ${local_root} | awk '{print $2}' | grep ${local_identifier} 2> /dev/null"); else
-			snap_shots_strict=$(qm listsnapshot "${local_root}" | awk '{print $2}' | grep ${local_identifier} 2> /dev/null)
+			snap_shots=$(ssh ${local_server} "qm listsnapshot ${local_root} | awk '{print $2}' | grep ${local_identifier} 2> /dev/null"); else
+			snap_shots=$(qm listsnapshot "${local_root}" | awk '{print $2}' | grep ${local_identifier} 2> /dev/null)
 		fi
-		snap_shots_strict=$(echo "${snap_shots_strict}" | sed "s;^;${local_root}:;" 2> /dev/null)
+		snap_shots=$(echo "${snap_shots}" | sed "s;^;${local_root}:;" 2> /dev/null)
 
 	elif [[ "${local_mode}" == "elastic" ]]; then
 		local_repo=$(echo "${local_root}" | cut -d ":" -f 2)
 		local_root=$(echo "${local_root}" | cut -d ":" -f 1)
 		if [[ -n "${ssh_target_p1}" ]]; then
-			snap_shots_strict=$(ssh ${local_server} "curl -X GET ${app_server}:${app_server_port}/_snapshot/${local_repo}/_all?verbose=false" 2> /dev/null); else
-			snap_shots_strict=$(curl -X GET ${app_server}:${app_server_port}/_snapshot/${local_repo}/_all?verbose=false 2> /dev/null)
+			snap_shots=$(ssh ${local_server} "curl -X GET ${app_server}:${app_server_port}/_snapshot/${local_repo}/_all?verbose=false" 2> /dev/null); else
+			snap_shots=$(curl -X GET ${app_server}:${app_server_port}/_snapshot/${local_repo}/_all?verbose=false 2> /dev/null)
 		fi
 		# for some reason awk doesn't read last line. Therefore an empty last line has to be left.
-		snap_shots_strict=$(echo "${snap_shots_strict}" | cut -d '{' -f 3- | sed 's/}]}/\n/g' | sed 's/},{/\n/g' | awk -F',' -v OFS=':' '{print $1,$3}' | sed 's/"//g' | awk -F ':' -v condition1="[${local_root}]" '$4 == condition1 { print $2 }' | sed -e "s/^/${local_repo}\//" | grep ${local_identifier} 2> /dev/null)
+		snap_shots=$(echo "${snap_shots}" | cut -d '{' -f 3- | sed 's/}]}/\n/g' | sed 's/},{/\n/g' | awk -F',' -v OFS=':' '{print $1,$3}' | sed 's/"//g' | awk -F ':' -v condition1="[${local_root}]" '$4 == condition1 { print $2 }' | sed -e "s/^/${local_repo}\//" | grep ${local_identifier} 2> /dev/null)
+	fi
+
+	# rollback shout not be restricted to current snapname
+	if [[ -n "${do_rollback}" ]]; then
+		snap_shots_strict="${snap_shots}"
+		snap_shots_strict=$(echo "${snap_shots}" | grep ${local_identifier} || true)
 	fi
 	previous=$(echo "${snap_shots_strict}" | grep "${local_datestring}")
 }
@@ -434,6 +443,38 @@ function do-snapdel() {
 			eval ${command}
 		fi
 	done
+}
+
+function do-rollback() {
+	local local_snap_shots local_mode local_snap_number local_root new_root local_rollback
+	local_snap_shots="${1}"
+	local_mode="${2}"
+	local_snap_number="${3}"
+	local_root="${4}"
+	local_rollback="${5}"
+
+	# determine number of the snapshot to rollback
+	if [[ "${local_rollback}" == "first" ]]; then
+		local_rollback=$(echo "${local_snap_shots}" | awk 'NR==1{print $0}');
+	elif [[ "${local_rollback}" == "last" ]]; then
+		local_rollback=${local_snap_shots##*$'\n'}; else
+		# if rollback is interactive, show the snapshots and read the result
+		if [[ "${local_rollback}" == "interactive" ]]; then
+			echo "Which snapshot do you want to rollback:"
+			awk '{printf("%1d %s\n", NR, $0)}' <<< ${local_snap_shots}
+			read local_rollback
+		fi
+		# check if local_rollback is an integer and within the borders
+		if [[ "${local_rollback}" -eq "${local_rollback}" ]] && [[ "${local_rollback}" -gt "0" ]] && [[ "${local_rollback}" -le "${local_snap_number}" ]]; then
+			local_rollback=$(echo "${local_snap_shots}" | sed -n "${local_rollback}"p); else
+			echo "${local_rollback} is not a valid snapshot number"
+		fi
+	fi
+
+	if [[ -n "${check_commands}" ]]; then
+		echo "${command}"; else
+		eval ${command}
+	fi
 }
 
 # -------------------------------- Main Script ---------------------------------
@@ -723,7 +764,10 @@ do	aa=$((${aa} + 1))
 			printf "The Snapshotnumber is ${snap_number_strict}:\n${snap_shots_strict}\n"
 			continue
 		fi
-		do-snapdel "${snap_shots_strict}" "${mode_create}" "${snap_number_strict}" "${snap_limit_current}" "${ssh_target_p1}" "${ssh_target_p2}"
+		if [[ -n "${do_rollback}" ]]; then
+			do-rollback "${snap_shots_strict}" "${mode_create}" "${snap_number_strict}" "${root_set[aa]}" "${do_rollback}"; else
+			do-snapdel "${snap_shots_strict}" "${mode_create}" "${snap_number_strict}" "${snap_limit_current}" "${ssh_target_p1}" "${ssh_target_p2}"
+		fi
 	fi
 	unset snap_file snap_file_type snap_file_type_static config_options_rsync2
 done

@@ -33,6 +33,8 @@ _own-snapshot() {
 			;;
 		-o)	list="commands config full previous snapshots"
 			;;
+		-r)	list="first interactive last"
+			;;
 		*)	list="-c -e -i -f -l -m -n -o -p -q -s -t -z -v -h"
 			;;
 	esac
