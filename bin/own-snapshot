@@ -536,7 +536,10 @@ function do-rollback() {
 	elif [[ "${local_mode}" == "kvm" ]]; then
 		local_rollback_string=$(echo "${local_rollback}" | cut -d ":" -f 2-)
 		local_rollback=$(echo "${local_rollback}" | cut -d ":" -f 1)
-		command="${local_ssh_1}qm rollback ${local_rollback} ${local_rollback_string}${local_ssh_2}"
+		command="${local_ssh_1}qm rollback ${local_rollback} ${local_rollback_string}${local_ssh_2}";
+
+	elif [[ "${local_mode}" == "lxd" ]]; then
+		command="${local_ssh_1}lxc restore ${local_root} ${local_rollback}${local_ssh_2}"
 	fi
 
 	if [[ -n "${check_commands}" ]]; then
