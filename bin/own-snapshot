@@ -120,6 +120,17 @@ fi
 
 # ------------------------------- Functions ------------------------------------
 
+function check-mount() {
+	local to_check is_mounted
+	to_check=${1}
+
+	is_mounted=$(awk -v condition1="${to_check}" '$3 == condition1 { print $0 }' <<< "${mounts}")
+	#cat "${mounts}" | grep "\b)")grep "\b${mode}\b"
+	if [[ -n "${is_mounted}" ]]; then
+		echo "${is_mounted}"
+	fi
+}
+
 function set-file() {
 	# set-file has to be in a function since it is called if root_set=tar again
 	if [[ "${mode}" == "tar" ]]; then
@@ -282,8 +293,8 @@ function get-snapshots() {
 
 	elif [[ "${local_mode}" == "btrfs" ]] || [[ "${1}" == "file" ]]; then
 		if [[ -n "${ssh_target_p1}" ]]; then
-			snap_shots=$(ssh ${local_server} "find ${local_root}${local_identifier}* -maxdepth 0 2> /dev/null"); else
-			snap_shots=$(find "${local_root}"${local_identifier}* -maxdepth 0 2> /dev/null)
+			snap_shots=$(ssh ${local_server} "find ${local_root}* -maxdepth 0 2> /dev/null"); else
+			snap_shots=$(find "${local_root}"* -maxdepth 0 2> /dev/null)
 		fi
 
 	elif [[ "${local_mode}" == "lxd" ]]; then
@@ -295,8 +306,8 @@ function get-snapshots() {
 
 	elif [[ "${local_mode}" == "kvm" ]]; then
 		if [[ -n "${ssh_target_p1}" ]]; then
-			snap_shots=$(ssh ${local_server} "qm listsnapshot ${local_root} | awk '{print $2}' | grep ${local_identifier} 2> /dev/null"); else
-			snap_shots=$(qm listsnapshot "${local_root}" | awk '{print $2}' | grep ${local_identifier} 2> /dev/null)
+			snap_shots=$(ssh ${local_server} "qm listsnapshot ${local_root} | egrep -v "current" | awk '{print $2}'"); else
+			snap_shots=$(qm listsnapshot "${local_root}" | egrep -v "current" | awk '{print $2}')
 		fi
 		snap_shots=$(echo "${snap_shots}" | sed "s;^;${local_root}:;" 2> /dev/null)
 
@@ -313,8 +324,8 @@ function get-snapshots() {
 
 	# rollback shout not be restricted to current snapname
 	if [[ -n "${do_rollback}" ]]; then
-		snap_shots_strict="${snap_shots}"
-		snap_shots_strict=$(echo "${snap_shots}" | grep ${local_identifier} || true)
+		snap_shots_strict="${snap_shots}"; else
+		snap_shots_strict=$(echo "${snap_shots}" | grep ${local_identifier} 2> /dev/null)
 	fi
 	previous=$(echo "${snap_shots_strict}" | grep "${local_datestring}")
 }
@@ -446,7 +457,7 @@ function do-snapdel() {
 }
 
 function do-rollback() {
-	local local_snap_shots local_mode local_snap_number local_root new_root local_rollback
+	local local_snap_shots local_mode local_snap_number local_root new_root local_rollback local_rollback_string
 	local_snap_shots="${1}"
 	local_mode="${2}"
 	local_snap_number="${3}"
@@ -455,20 +466,21 @@ function do-rollback() {
 
 	# determine number of the snapshot to rollback
 	if [[ "${local_rollback}" == "first" ]]; then
-		local_rollback=$(echo "${local_snap_shots}" | awk 'NR==1{print $0}');
+		local_rollback="1";
 	elif [[ "${local_rollback}" == "last" ]]; then
-		local_rollback=${local_snap_shots##*$'\n'}; else
+		local_rollback=$(echo "${local_snap_shots}" | wc -l); else
 		# if rollback is interactive, show the snapshots and read the result
 		if [[ "${local_rollback}" == "interactive" ]]; then
 			echo "Which snapshot do you want to rollback:"
 			awk '{printf("%1d %s\n", NR, $0)}' <<< ${local_snap_shots}
 			read local_rollback
 		fi
-		# check if local_rollback is an integer and within the borders
-		if [[ "${local_rollback}" -eq "${local_rollback}" ]] && [[ "${local_rollback}" -gt "0" ]] && [[ "${local_rollback}" -le "${local_snap_number}" ]]; then
-			local_rollback=$(echo "${local_snap_shots}" | sed -n "${local_rollback}"p); else
-			echo "${local_rollback} is not a valid snapshot number"
-		fi
+	fi
+
+	# check if local_rollback is an integer and within the borders
+	if [[ "${local_rollback}" -eq "${local_rollback}" ]] && [[ "${local_rollback}" -gt "0" ]] && [[ "${local_rollback}" -le "${local_snap_number}" ]]; then
+		local_rollback=$(echo "${local_snap_shots}" | sed -n "${local_rollback}"p); else
+		echo "${local_rollback} is not a valid snapshot number" && exit 0
 	fi
 
 	if [[ -n "${check_commands}" ]]; then
@@ -708,6 +720,18 @@ elif [[ "${mode_snapshot}" == "zfs" ]]; then
 			snap_pre_rollback="set"; else
 			unset snap_pre_rollback
 		fi
+	fi
+fi
+
+if [[ -n "${do_rollback}" ]]; then
+	# encrypted files can't be restored
+	if [[ -n "${config_encryption}" ]] || [[ -n "${config_compression}" ]] || [[ -n "${container_create}" ]]; then
+		echo "Rollback does not work with asymmetric encryption. TAR and compression are not implemented yet." && exit 0
+	fi
+
+	if [[ -n "${ssh_source_p1}" ]]; then
+		mounts=$(ssh "${ssh_server}" "mount" | egrep -v "^cgroup" | egrep -v "^tmpfs"); else
+		mounts=$(mount | egrep -v "^cgroup" | egrep -v "^tmpfs")
 	fi
 fi
 
