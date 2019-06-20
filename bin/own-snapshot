@@ -531,7 +531,12 @@ function do-rollback() {
 		if [[ "${?}" == "0" ]]; then
 			command="${ssh_source_p1}${command1}${ssh_source_p2} && rsync ${config_options_rsync} ${ssh_rsync_target}${local_rollback}${config_options_rsync2} ${ssh_source_rsync}${new_root}${command2}"; else
 			echo "${local_root} couldn't be unmounted"
-		fi
+		fi;
+
+	elif [[ "${local_mode}" == "kvm" ]]; then
+		local_rollback_string=$(echo "${local_rollback}" | cut -d ":" -f 2-)
+		local_rollback=$(echo "${local_rollback}" | cut -d ":" -f 1)
+		command="${local_ssh_1}qm rollback ${local_rollback} ${local_rollback_string}${local_ssh_2}"
 	fi
 
 	if [[ -n "${check_commands}" ]]; then
