@@ -568,7 +568,7 @@ if [[ "${config_function}" == "list" ]]; then
 
 	# if the last field in root_set is tar, then the previous fields will stored in a tar-file
 	if [[ -n "${root_set[@]}" ]]; then
-		container_create=$(echo "${root_set[-1]}" | grep "tar" 2> /dev/null)
+		container_create=$(echo "${root_set[-1]}" | grep "\btar\b" 2> /dev/null)
 	fi
 	unset element block_config block_table supported_frequencies; else
 	# translations own-backup arguments
