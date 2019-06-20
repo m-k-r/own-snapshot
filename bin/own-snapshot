@@ -483,6 +483,24 @@ function do-rollback() {
 		echo "${local_rollback} is not a valid snapshot number" && exit 0
 	fi
 
+	if [[ "${local_mode}" == "btrfs" ]]; then
+		# first it has to be checked if the source is mounted or not. If it is not mounted it can be deleted, else it has to be copied
+		new_root=$(check-mount "${local_root}")
+
+		# if new_root is different from local_root, it is mounted and has to be copied, else it can be deleted
+		if [[ -n "${new_root}" ]]; then
+			command1="btrfs subvolume delete ${local_root}"; else
+			# if btrfs is mounted, the source of the mount has to be determined.
+			local_root=$(echo "${new_root}" | awk '{ print $1 }')
+			local_root=$(awk -v condition1="${local_root}" '$1 == condition1 { print $0 }' <<< "${mounts}" | grep "subvol=/)$" | awk '{ print $3 }')/$(echo "${new_root}" | rev | cut -d "=" -f 1 | cut -c 2- | rev | cut -c 2-)
+			# because it is mounted it can't be deleted, but it can be moved
+			command1="mv ${local_root} ${local_root}-deprecated"
+		fi
+
+		# rollback
+		command="${local_ssh_1}${command1} && btrfs subvolume snapshot ${local_rollback} ${local_root}${local_ssh_2}"
+	fi
+
 	if [[ -n "${check_commands}" ]]; then
 		echo "${command}"; else
 		eval ${command}
