@@ -503,7 +503,35 @@ function do-rollback() {
 	elif [[ "${local_mode}" == "elastic" ]]; then
 		local_rollback_string=$(echo "${local_rollback}" | cut -d "/" -f 2)
 		local_rollback=$(echo "${local_rollback}" | cut -d "/" -f 1)
-		command="${local_ssh_1}curl -X POST ${app_server}:${app_server_port}/_snapshot/${local_rollback}/${local_rollback_string}/_restore${local_ssh_2}"
+		command="${local_ssh_1}curl -X POST ${app_server}:${app_server_port}/_snapshot/${local_rollback}/${local_rollback_string}/_restore${local_ssh_2}";
+
+	elif [[ "${local_mode}" == "rsync" ]]; then
+		new_root=$(check-mount "${local_root}")
+		if [[ -n "${new_root}" ]]; then
+			command2=" && ${ssh_source_p1}mount ${local_root}${ssh_source_p2}"
+			# if local_root is mounted, the source of the mount has to be determined. Atm only bind-mount is considered. This can be done manually or via fstab
+			# since the output of mount varies, unlike with btrfs, the source of the mount can only be determined if it is mounted via fstab
+			if [[ -n "${ssh_source_p1}" ]]; then
+				new_root=$(ssh ${ssh_server} "cat /etc/fstab" | awk -v condition1="${local_root}" '$2 == condition1 { print $1 }'); else
+				new_root=$(cat /etc/fstab | awk -v condition1="${local_root}" '$2 == condition1 { print $1 }')
+			fi
+
+			if [[ -n "${check_commands}" ]]; then
+				echo "${ssh_source_p1}umount ${local_root}${ssh_source_p2}"; else
+				# don't actually unmount if the commands only shoud be shown
+				if [[ -n "${ssh_source_p1}" ]]; then
+					ssh ${ssh_server} "umount ${local_root} 2> /dev/null"; else
+					umount "${local_root}" 2> /dev/null
+				fi
+			fi; else
+			new_root="${local_root}"
+		fi
+		command1="rm -rf ${new_root}"
+
+		if [[ "${?}" == "0" ]]; then
+			command="${ssh_source_p1}${command1}${ssh_source_p2} && rsync ${config_options_rsync} ${ssh_rsync_target}${local_rollback}${config_options_rsync2} ${ssh_source_rsync}${new_root}${command2}"; else
+			echo "${local_root} couldn't be unmounted"
+		fi
 	fi
 
 	if [[ -n "${check_commands}" ]]; then
