@@ -477,8 +477,11 @@ function do-rollback() {
 		fi
 	fi
 
-	# check if local_rollback is an integer and within the borders
+	# check if local_rollback is an integer and within the borders. for zfs local_rollback has to be the last snapshot
 	if [[ "${local_rollback}" -eq "${local_rollback}" ]] && [[ "${local_rollback}" -gt "0" ]] && [[ "${local_rollback}" -le "${local_snap_number}" ]]; then
+		if [[ ! "${local_rollback}" -eq "${local_snap_number}" ]] && [[ "${local_mode}" == "zfs" ]]; then
+			echo "for zfs rollback is only possible with last snapshot" && exit 0
+		fi
 		local_rollback=$(echo "${local_snap_shots}" | sed -n "${local_rollback}"p); else
 		echo "${local_rollback} is not a valid snapshot number" && exit 0
 	fi
@@ -539,7 +542,11 @@ function do-rollback() {
 		command="${local_ssh_1}qm rollback ${local_rollback} ${local_rollback_string}${local_ssh_2}";
 
 	elif [[ "${local_mode}" == "lxd" ]]; then
-		command="${local_ssh_1}lxc restore ${local_root} ${local_rollback}${local_ssh_2}"
+		command="${local_ssh_1}lxc restore ${local_root} ${local_rollback}${local_ssh_2}";
+
+	elif [[ "${local_mode}" == "zfs" ]]; then
+		command="${local_ssh_1}zfs rollback ${local_rollback}${local_ssh_2}"; else
+		echo "mode: ${local_mode} is not supported by rollback" && exit 0
 	fi
 
 	if [[ -n "${check_commands}" ]]; then
