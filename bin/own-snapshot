@@ -498,7 +498,12 @@ function do-rollback() {
 		fi
 
 		# rollback
-		command="${local_ssh_1}${command1} && btrfs subvolume snapshot ${local_rollback} ${local_root}${local_ssh_2}"
+		command="${local_ssh_1}${command1} && btrfs subvolume snapshot ${local_rollback} ${local_root}${local_ssh_2}";
+
+	elif [[ "${local_mode}" == "elastic" ]]; then
+		local_rollback_string=$(echo "${local_rollback}" | cut -d "/" -f 2)
+		local_rollback=$(echo "${local_rollback}" | cut -d "/" -f 1)
+		command="${local_ssh_1}curl -X POST ${app_server}:${app_server_port}/_snapshot/${local_rollback}/${local_rollback_string}/_restore${local_ssh_2}"
 	fi
 
 	if [[ -n "${check_commands}" ]]; then
