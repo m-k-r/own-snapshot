@@ -125,7 +125,7 @@ function check-mount() {
 	to_check=${1}
 
 	is_mounted=$(awk -v condition1="${to_check}" '$3 == condition1 { print $0 }' <<< "${mounts}")
-	#cat "${mounts}" | grep "\b)")grep "\b${mode}\b"
+
 	if [[ -n "${is_mounted}" ]]; then
 		echo "${is_mounted}"
 	fi
@@ -491,7 +491,7 @@ function do-rollback() {
 		new_root=$(check-mount "${local_root}")
 
 		# if new_root is different from local_root, it is mounted and has to be copied, else it can be deleted
-		if [[ -n "${new_root}" ]]; then
+		if [[ ! -n "${new_root}" ]] || [[ -z "${new_root}" ]]; then
 			command1="btrfs subvolume delete ${local_root}"; else
 			# if btrfs is mounted, the source of the mount has to be determined.
 			local_root=$(echo "${new_root}" | awk '{ print $1 }')
