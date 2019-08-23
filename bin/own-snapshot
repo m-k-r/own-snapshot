@@ -403,8 +403,11 @@ function snap-file() {
 				unset container_source
 			fi; else
 
-			if [[ -n "${ssh_source_rsync}" ]] || [[ -n "${ssh_rsync_target}" ]]; then
-				command="rsync ${config_options_rsync} ${ssh_source_rsync}${root_set[aa]}${config_options_rsync2} ${ssh_rsync_target}${snap_set[aa]}${snap_string}${snap_file_type_static}${local_additional_tasks}"; else
+			if [[ -n "${ssh_source_rsync}" ]]; then
+				command="rsync ${config_options_rsync} ${ssh_source_rsync}${root_set[aa]}${config_options_rsync2} ${snap_set[aa]}${snap_string}${snap_file_type_static}${local_additional_tasks}";
+			elif [[ -n "${ssh_rsync_target}" ]]; then
+				#statements
+				command="rsync ${config_options_rsync} ${root_set[aa]}${config_options_rsync2} ${ssh_rsync_target}${snap_set[aa]}${snap_string}${snap_file_type_static} && ${ssh_target_p1}:${local_additional_tasks}${ssh_target_p2}"; else
 				command="${ssh_source_p1}rsync ${config_options_rsync} ${root_set[aa]}${config_options_rsync2} ${snap_set[aa]}${snap_string}${snap_file_type_static}${local_additional_tasks}${ssh_source_p2}"
 			fi
 		fi
